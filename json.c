@@ -633,11 +633,11 @@ json_value* json_dotget(json_value *v, const char *dotname)
 	}
 
 	if (v->type == json_type_array) {
-        /* 0 1 2 3 4 5
-           [ x ] . y
-           ^     ^
-           |     |
-        dotname  p  */
+		/* 0 1 2 3 4 5
+		   [ x ] . y
+		   ^     ^
+		   |     |
+		dotname  p  */
 		if (p - 3 < dotname)
 			return NULL;
 		if (*dotname != '[' || *(p - 1) != ']')
@@ -653,11 +653,11 @@ json_value* json_dotget(json_value *v, const char *dotname)
 			return child;
 
 	} else {          /* json_type_object */
-        /* 0 1 2 3 4 5 6
-           f o o . b a r
-           ^     ^
-           |     |
-        dotname  p  */
+		/* 0 1 2 3 4 5 6
+		   f o o . b a r
+		   ^     ^
+		   |     |
+		dotname  p  */
 		if (p - 1 < dotname)
 			return NULL;
 		child = _json_object_get(v, dotname, (unsigned int)(p - dotname));
@@ -713,11 +713,11 @@ static double _NaN()
 static unsigned int _new_capacity(unsigned int capacity)
 {
 	if (capacity == 0)
-		capacity = 2;
-	else if (capacity < 32)
+		capacity = 4;
+	else if (capacity < 64)
 		capacity *= 2;
 	else
-		capacity += 16;
+		capacity += 64;
 
 	return capacity;
 }
