@@ -391,7 +391,7 @@ json_value* json_object_get(json_value *v, const char *name)
 json_value* json_object_set(json_value *v, const char *name, json_value *value)
 {
 	json_object *object = (json_object*)v;
-	unsigned int len, hash, index;
+	unsigned int len = (unsigned int)-1, hash, index;
 
 	assert(object);
 	assert(name);
@@ -441,7 +441,7 @@ json_value* json_object_set(json_value *v, const char *name, json_value *value)
 json_value* json_object_erase(json_value *v, const char *name)
 {
 	json_object *object = (json_object*)v;
-	unsigned int len, hash, i, index;
+	unsigned int len = (unsigned int)-1, hash, i, index;
 
 	assert(object);
 	assert(name);
@@ -515,15 +515,16 @@ json_value* json_array_set(json_value *v, unsigned int index, json_value *value)
 		return NULL;
 
 	if (index == array->size) {
-		unsigned int c;
-		json_value **p;
-
-		c = _new_capacity(array->capacity);
-		p = (json_value**)realloc(array->values, sizeof(json_value*) * c);
-		if (!p)
-			return NULL;
-		array->values = p;
-		array->capacity = c;
+		if (array->size == array->capacity) {
+			unsigned int c;
+			json_value **p;
+			c = _new_capacity(array->capacity);
+			p = (json_value**)realloc(array->values, sizeof(json_value*) * c);
+			if (!p)
+				return NULL;
+			array->values = p;
+			array->capacity = c;
+		}
 
 		array->values[index] = value;
 		array->size += 1;
@@ -641,7 +642,7 @@ json_value* json_dotget(json_value *v, const char *dotname)
 			return NULL;
 		if (*dotname != '[' || *(p - 1) != ']')
 			return NULL;
-		index = _str_to_index(dotname + 1, (unsigned int)(p - dotname - 3));
+		index = _str_to_index(dotname + 1, (unsigned int)(p - dotname - 2));
 		child = json_array_get(v, index);
 		if (!child)
 			return NULL;
