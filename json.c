@@ -807,7 +807,9 @@ static unsigned int _str_to_index(const char *str, unsigned int len)
 		if (c < '0' || c > '9')
 			return (unsigned int)-1;
 		
-		if (i != 0)
+		if (i == 0)
+			num = 0;
+		else
 			num *= 10;
 		num += c - '0';
 	}
