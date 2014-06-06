@@ -1,61 +1,258 @@
 #include "json.h"
+#include <string.h>
+#include <assert.h>
 
-void test()
-{
-	size_t s0 = sizeof(json_value);
-	size_t s1 = sizeof(json_string);
-	size_t s2 = sizeof(json_number);
-	size_t s3 = sizeof(json_object);
-	size_t s4 = sizeof(json_array);
-
-	json_value *v, *v2;
-	json_value_type type;
-	const char *str;
-	unsigned int len;
-	unsigned int size;
-	double num;
-	int boolean;
-
-	v = json_string_alloc("hello", (unsigned int)-1);
-	str = json_string_get(v);
-	len = json_string_len(v);
-	v = json_string_set(v, "abcd", (unsigned int)-1);
-	str = json_string_get(v);
-	len = json_string_len(v);
-	v = json_string_set(v, "xxxxyyyyzzzz", 12);
-	str = json_string_get(v);
-	len = json_string_len(v);
-	num = json_number_get(v);
-	json_free(v);
-
-	v = json_number_alloc(100);
-	num = json_number_get(v);
-	v = json_number_set(v, 99.99);
-	str = json_string_get(v);
-	json_free(v);
-
-	v = json_boolean_alloc(1);
-	boolean = json_boolean_get(v);
-	v = json_boolean_set(v, 0);
-	json_free(v);
-
-	v = json_null_alloc();
-	type = json_type(v);
-	json_free(v);
-
-	v = json_object_alloc();
-	size = json_object_size(v);
-	v2 = json_object_get(v, "foo");
-	json_free(v);
-
-	v = json_array_alloc();
-	size = json_array_size(v);
-	v2 = json_array_get(v, 0);
-	json_free(v);
-}
+static void test_string();
+static void test_number();
+static void test_boolean();
+static void test_null();
+static void test_object();
+static void test_array();
+static void test_dotget();
 
 int main(int argc, char **argv)
 {
-	test();
+	test_string();
+	test_number();
+	test_boolean();
+	test_null();
+	test_object();
+	test_array();
+	test_dotget();
 	return 0;
+}
+
+static void test_string()
+{
+	json_value *v;
+	json_value_type type;
+	const char *str;
+	unsigned int len;
+	int boolean;
+
+	v = json_string_alloc("hello", (unsigned int)-1);
+	assert(v);
+	type = json_type(v);
+	assert(type == json_type_string);
+
+	str = json_string_get(v);
+	assert(str && strcmp(str, "hello") == 0);
+	len = json_string_len(v);
+	assert(len == 5);
+	
+	v = json_string_set(v, "abcd", (unsigned int)-1);
+	assert(v);
+	str = json_string_get(v);
+	assert(str && strcmp(str, "abcd") == 0);
+	len = json_string_len(v);
+	assert(len == 4);
+
+	v = json_string_set(v, "xxxxyyyyzzzz", 12);
+	assert(v);
+	str = json_string_get(v);
+	assert(str && strcmp(str, "xxxxyyyyzzzz") == 0);
+	len = json_string_len(v);
+	assert(len == 12);
+
+	boolean = json_boolean_get(v);
+	assert(boolean == -1);
+
+	json_free(v);
+}
+
+static void test_number()
+{
+	json_value *v;
+	json_value_type type;
+	double num;
+	const char *str;
+
+	v = json_number_alloc(42);
+	assert(v);
+	type = json_type(v);
+	assert(type == json_type_number);
+
+	num = json_number_get(v);
+	assert(num == 42.0);
+	v = json_number_set(v, 99.99);
+	assert(v);
+	num = json_number_get(v);
+	assert(num == 99.99);
+
+	str = json_string_get(v);
+	assert(str == NULL);
+
+	json_free(v);
+}
+
+static void test_boolean()
+{
+	json_value *v;
+	json_value_type type;
+	int boolean;
+
+	v = json_boolean_alloc(1);
+	assert(v);
+	
+	type = json_type(v);
+	assert(type == json_type_true);
+	boolean = json_boolean_get(v);
+	assert(boolean == 1);
+	
+	v = json_boolean_set(v, 0);
+	assert(v);
+
+	type = json_type(v);
+	assert(type == json_type_false);
+	boolean = json_boolean_get(v);
+	assert(boolean == 0);
+	
+	json_free(v);
+}
+
+static void test_null()
+{
+	json_value *v;
+	json_value_type type;
+
+	v = json_null_alloc();
+	assert(v);
+	type = json_type(v);
+	assert(type == json_type_null);
+	json_free(v);
+}
+
+static void test_object()
+{
+	json_value *v, *v2;
+	json_value_type type;
+	unsigned int size;
+	unsigned int i;
+	char name[2] = { 0 };
+
+	v = json_object_alloc();
+	assert(v);
+	type = json_type(v);
+	assert(type == json_type_object);
+
+	size = json_object_size(v);
+	assert(size == 0);
+
+	v2 = json_object_get(v, "foo");
+	assert(v2 == NULL);
+
+	for (i = 0; i < 10; ++i) {
+		v2 = json_number_alloc(i + 1);
+		assert(v2);
+		name[0] = '0' + i;
+		v = json_object_set(v, name, v2);
+		assert(v);
+	}
+	size = json_object_size(v);
+	assert(size == 10);
+
+	v2 = json_object_get(v, "8");
+	assert(v2 != NULL);
+	assert(json_type(v2) == json_type_number);
+	assert(json_number_get(v2) == 9);
+
+	v2 = json_string_alloc("master yoda", (unsigned int)-1);
+	assert(v2);
+	v = json_object_set(v, "3", v2);
+	assert(v != NULL);
+	v2 = json_object_get(v, "3");
+	assert(v2 != NULL);
+	assert(json_type(v2) == json_type_string);
+	assert(strcmp(json_string_get(v2), "master yoda") == 0);
+
+	v = json_object_erase(v, "5");
+	assert(v);
+	size = json_object_size(v);
+	assert(size == 9);
+
+	json_free(v);
+}
+
+static void test_array()
+{
+	json_value *v, *v2;
+	json_value_type type;
+	unsigned int size;
+	unsigned int i;
+
+	v = json_array_alloc();
+	assert(v);
+	type = json_type(v);
+	assert(type == json_type_array);
+
+	size = json_array_size(v);
+	assert(size == 0);
+	v2 = json_array_get(v, 0);
+	assert(v2 == NULL);
+
+	for (i = 0; i < 100; ++i) {
+		v2 = json_boolean_alloc(i % 2);
+		assert(v2);
+		v = json_array_set(v, i, v2);
+		assert(v);
+	}
+	size = json_array_size(v);
+	assert(size == 100);
+
+	v2 = json_array_get(v, 42);
+	assert(v2);
+	assert(json_type(v2) == json_type_false);
+
+	v2 = json_string_alloc("hello world", (unsigned int)-1);
+	assert(v2);
+	v = json_array_set(v, 2, v2);
+	assert(v);
+	v2 = json_array_get(v, 2);
+	assert(v2);
+	assert(json_type(v2) == json_type_string);
+
+	v = json_array_erase(v, 10);
+	assert(v);
+	size = json_array_size(v);
+	assert(size == 99);
+
+	json_free(v);
+}
+
+static void test_dotget()
+{
+	json_value *object, *array, *v;
+	unsigned int i;
+	int boolean;
+
+	object = json_object_alloc();
+	assert(object);
+	array = json_array_alloc();
+	assert(array);
+	for (i = 0; i < 10; ++i) {
+		v = json_boolean_alloc(i % 2);
+		assert(v);
+		v = json_array_set(array, i, v);
+		assert(v);
+	}
+	v = json_object_set(object, "abc", array);
+	assert(v);
+
+	v = json_dotget(object, "abc");
+	assert(v && json_type(v) == json_type_array);
+	v = json_dotget(object, "abc.[3]");
+	assert(v && json_type(v) == json_type_true);
+	v = json_dotget(object, "abc.xxx");
+	assert(v == NULL);
+	v = json_dotget(object, "");
+	assert(v == NULL);
+
+	boolean = json_dotget_boolean(object, "abc.[3]");
+	assert(boolean == 1);
+	boolean = json_dotget_boolean(object, "abc.[8]");
+	assert(boolean == 0);
+	boolean = json_dotget_boolean(object, "abc.[999]");
+	assert(boolean == -1);
+
+	json_free(object);
 }
