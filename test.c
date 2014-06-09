@@ -254,5 +254,9 @@ static void test_dotget()
 	boolean = json_dotget_boolean(object, "abc.[999]");
 	assert(boolean == -1);
 
+	v = json_clone(object);
+	assert(v);
+	json_free(v);
+
 	json_free(object);
 }

@@ -521,6 +521,7 @@ json_value* json_array_set(json_value *v, unsigned int index, json_value *value)
 		if (array->size == array->capacity) {
 			unsigned int c;
 			json_value **p;
+
 			c = _new_capacity(array->capacity);
 			p = (json_value**)realloc(array->values, sizeof(json_value*) * c);
 			if (!p)
@@ -561,6 +562,91 @@ json_value* json_array_erase(json_value *v, unsigned int index)
 	array->size -= 1;
 	
 	return v;
+}
+
+/*----------------------------------------------------------------------------*/
+
+json_value* json_clone(json_value *v)
+{
+	json_value *c = NULL;
+	json_string *string;
+	json_number *number;
+	json_object *object;
+	json_array  *array;
+	unsigned int i;
+
+	assert(v);
+
+	switch (v->type)
+	{
+	case json_type_string:
+		string = (json_string*)v;
+		if (string->trailing)
+			c = json_string_alloc(string->trailing_str.str, string->trailing_str.len);
+		else
+			c = json_string_alloc(string->str.ptr, string->str.len);
+		break;
+
+	case json_type_number:
+		number = (json_number*)v;
+		c = json_number_alloc(number->dbl);
+		break;
+
+	case json_type_true:
+	case json_type_false:
+	case json_type_null:
+		c = (json_value*)malloc(sizeof(json_value));
+		if (c)
+			c->type = v->type;
+		break;
+
+	case json_type_object:
+		object = (json_object*)v;
+		c = json_object_alloc();
+		if (c) {
+			for (i = 0; i < object->size; ++i) {
+				json_value *child_clone = json_clone(object->items[i].value);
+				if (!child_clone) {
+					json_free(c);
+					c = NULL;
+					break;
+				}
+				if (!json_object_set(c, object->items[i].name->str, child_clone)) {
+					json_free(child_clone);
+					json_free(c);
+					c = NULL;
+					break;
+				}
+			}
+		}
+		break;
+
+	case json_type_array:
+		array = (json_array*)v;
+		c = json_array_alloc();
+		if (c) {
+			for (i = 0; i < array->size; ++i) {
+				json_value *child_clone = json_clone(array->values[i]);
+				if (!child_clone) {
+					json_free(c);
+					c = NULL;
+					break;
+				}
+				if (!json_array_set(c, i, child_clone)) {
+					json_free(child_clone);
+					json_free(c);
+					c = NULL;
+					break;
+				}
+			}
+		}
+		break;
+
+	default:
+		assert(0);
+	}
+
+	return c;
 }
 
 /*----------------------------------------------------------------------------*/
