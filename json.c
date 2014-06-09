@@ -108,7 +108,10 @@ static unsigned int _name_to_index(
 	unsigned int len, 
 	unsigned int hash
 	);
-static unsigned int _str_to_index(const char *str, unsigned int len);
+static unsigned int _str_to_index(
+	const char *str, 
+	unsigned int len
+	);
 
 /*----------------------------------------------------------------------------*/
 
@@ -143,7 +146,7 @@ json_value* json_string_alloc(const char *str, unsigned int len)
 		
 	string->type = json_type_string;
 	string->trailing = 1;
-	string->capacity = (unsigned short)(sizeof(char*) + extra_cb);
+	string->capacity = (unsigned int)(sizeof(char*) + extra_cb);
 	string->trailing_str.len = len;
 	memcpy(string->trailing_str.str, str, len);
 	string->trailing_str.str[len] = '\0';
