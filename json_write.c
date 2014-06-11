@@ -31,6 +31,11 @@
 */
 
 #include "json.h"
+#ifdef _MSC_VER
+/* warning C4996: '_snprintf': This function or variable may be unsafe. Consider using _snprintf_s instead. 
+   To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details. */
+  #define _CRT_SECURE_NO_WARNINGS
+#endif
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
@@ -192,10 +197,23 @@ static int _write_number(double number, context *ctx)
 	char tmp[30];
 	int len;
 	
+#ifdef _MSC_VER
 	len = _snprintf(tmp, sizeof(tmp), "%f", number);
+#else
+	len = snprintf(tmp, sizeof(tmp), "%f", number);
+#endif
 	if (len <= 0)
 		return 0;
-	
+
+	/* truncate trailing zeros */
+	while (len) {
+		if (tmp[len - 1] != '0' && tmp[len - 1] != '.')
+			break;
+		len--;
+	}
+	if (!len)  /* 0.000000 */
+		len = 1;
+
 	return _write(tmp, len, ctx);
 }
 
