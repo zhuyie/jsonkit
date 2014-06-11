@@ -283,12 +283,12 @@ static void test_write()
 	object = json_object_alloc();
 	assert(object);
 	
-	v = json_string_alloc("bar", (unsigned int)-1);
+	v = json_string_alloc("bar\"123\"", (unsigned int)-1);
 	assert(v);
-	object = json_object_set(object, "foo", v);
+	object = json_object_set(object, "foo\txxx\\yyy\nzzz", v);
 	assert(object);
 	
-	v = json_number_alloc(42);
+	v = json_number_alloc(0);
 	assert(v);
 	object = json_object_set(object, "num1", v);
 	assert(object);
