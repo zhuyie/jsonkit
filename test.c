@@ -1,5 +1,6 @@
 #include "json.h"
 #include <string.h>
+#include <stdio.h>
 #include <assert.h>
 
 static void test_string();
@@ -8,7 +9,8 @@ static void test_boolean();
 static void test_null();
 static void test_object();
 static void test_array();
-static void test_dotget();
+static void test_dotget_clone();
+static void test_write();
 
 int main(int argc, char **argv)
 {
@@ -18,7 +20,8 @@ int main(int argc, char **argv)
 	test_null();
 	test_object();
 	test_array();
-	test_dotget();
+	test_dotget_clone();
+	test_write();
 	return 0;
 }
 
@@ -219,7 +222,7 @@ static void test_array()
 	json_free(v);
 }
 
-static void test_dotget()
+static void test_dotget_clone()
 {
 	json_value *object, *array, *v;
 	unsigned int i;
@@ -257,6 +260,86 @@ static void test_dotget()
 	v = json_clone(object);
 	assert(v);
 	json_free(v);
+
+	json_free(object);
+}
+
+char buf[8192];
+unsigned int buf_size = 0;
+static int my_write(const char *data, int len)
+{
+	assert(len + buf_size <= 8192);
+	memcpy(buf + buf_size, data, len);
+	buf_size += len;
+	return len;
+}
+
+static void test_write()
+{
+	json_value *object, *v, *v1, *v2;
+	unsigned int i;
+	json_write_config write_config;
+
+	object = json_object_alloc();
+	assert(object);
+	
+	v = json_string_alloc("bar", (unsigned int)-1);
+	assert(v);
+	object = json_object_set(object, "foo", v);
+	assert(object);
+	
+	v = json_number_alloc(42);
+	assert(v);
+	object = json_object_set(object, "num1", v);
+	assert(object);
+	
+	v = json_number_alloc(99.99);
+	assert(v);
+	object = json_object_set(object, "num2", v);
+	assert(object);
+	
+	v = json_boolean_alloc(0);
+	assert(v);
+	object = json_object_set(object, "bool", v);
+	assert(object);
+	
+	v = json_null_alloc(0);
+	assert(v);
+	object = json_object_set(object, "null", v);
+	assert(object);
+	
+	v = json_array_alloc();
+	assert(v);
+	object = json_object_set(object, "empty_array", v);
+	assert(object);
+	
+	v = json_object_alloc();
+	assert(v);
+	object = json_object_set(object, "empty_object", v);
+	assert(object);
+	
+	v = json_array_alloc();
+	assert(v);
+	for (i = 0; i < 10; ++i) {
+		v1 = json_object_alloc();
+		assert(v1);
+		v2 = json_boolean_alloc(i % 2);
+		assert(v2);
+		v1 = json_object_set(v1, "test", v2);
+		assert(v1);
+
+		v = json_array_set(v, i, v1);
+		assert(v);
+	}
+	object = json_object_set(object, "array", v);
+	assert(object);
+
+	write_config.compact = 0;
+	write_config.crlf = 1;
+	write_config.indent = 4;
+	write_config.write = my_write;
+	json_write(object, write_config);
+	printf("%s\n", buf);
 
 	json_free(object);
 }

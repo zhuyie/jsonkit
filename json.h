@@ -94,6 +94,16 @@ int          json_dotget_boolean(json_value *v, const char *dotname);
 json_value*  json_dotget_object(json_value *v, const char *dotname);
 json_value*  json_dotget_array(json_value *v, const char *dotname);
 
+
+typedef struct json_write_config {
+	int compact;  	/* compact mode */
+	int indent;     /* indent levels(number of spaces) */
+	int crlf;       /* \r\n or \n */
+	int (*write)(const char *buf, int len);
+} json_write_config;
+
+int json_write(json_value *v, json_write_config config);
+
 #ifdef __cplusplus
 }
 #endif
