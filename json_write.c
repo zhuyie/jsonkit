@@ -136,12 +136,51 @@ static int _write_lineend_indent(context *ctx)
 
 static int _write_string(const char *string, context *ctx)
 {
-	int len = (int)strlen(string);
-	
+	const char *p = string;
+	char c[2];
+
 	if (!_write("\"", 1, ctx))
 		return 0;
-	if (!_write(string, len, ctx))
-		return 0;
+	
+	c[0] = '\\';
+	while (c[1] = *p++) {
+		switch (c[1]) {
+		case '\"':
+		case '\\':
+			goto MyLabel;
+		case '\b':
+			c[1] = 'b';
+			goto MyLabel;
+		case '\f':
+			c[1] = 'f';
+			goto MyLabel;
+		case '\n':
+			c[1] = 'n';
+			goto MyLabel;
+		case '\r':
+			c[1] = 'r';
+			goto MyLabel;
+		case '\t':
+			c[1] = 't';
+			
+		MyLabel:
+			if (string + 1 != p) {
+				if (!_write(string, (int)(p - 1 - string), ctx))
+					return 0;
+			}
+			if (!_write(c, 2, ctx))
+				return 0;
+			string = p;	
+			
+			break;
+		}
+	}
+
+	if (string + 1 != p) {
+		if (!_write(string, (int)(p - 1 - string), ctx))
+			return 0;
+	}
+
 	if (!_write("\"", 1, ctx))
 		return 0;
 	
