@@ -61,6 +61,7 @@ unsigned int json_string_len(json_value *v);
 
 json_value*  json_number_alloc(double number);
 double       json_number_get(json_value *v);
+#define      json_number_get_type(v, type)    (type)json_number_get(v)
 json_value*  json_number_set(json_value *v, double dbl);
 
 json_value*  json_boolean_alloc(int boolean);

@@ -68,6 +68,7 @@ static void test_number()
 	json_value *v;
 	json_value_type type;
 	double num;
+	unsigned short u2;
 	const char *str;
 
 	v = json_number_alloc(42);
@@ -77,6 +78,8 @@ static void test_number()
 
 	num = json_number_get(v);
 	assert(num == 42.0);
+	u2 = json_number_get_type(v, unsigned short);
+	assert(u2 == 42);
 	v = json_number_set(v, 99.99);
 	assert(v);
 	num = json_number_get(v);
