@@ -127,12 +127,32 @@ static int _write_lineend_indent(context *ctx)
 	if (!res)
 		return res;
 
-	if (ctx->config->indent > 0) {
+	if (ctx->config->indent > 0 && ctx->level > 0) {
+		static const char* indent_str[8] = {
+			" ",
+			"  ",
+			"   ",
+			"    ",
+			"     ",
+			"      ",
+			"       ",
+			"        "
+		};
 		int count = ctx->config->indent * ctx->level, i;
-		for (i = 0; i < count; ++i) {
-			res = _write(" ", 1, ctx);
-			if (!res)
-				break;
+		if (count <= 8) {
+			res = _write(indent_str[count - 1], count, ctx);
+		} else if (ctx->config->indent <= 8) {
+			for (i = 0; i < ctx->level; ++i) {
+				res = _write(indent_str[ctx->config->indent - 1], ctx->config->indent, ctx);
+				if (!res)
+					break;
+			}
+		} else {
+			for (i = 0; i < count; ++i) {
+				res = _write(" ", 1, ctx);
+				if (!res)
+					break;
+			}
 		}
 	}
 
@@ -147,11 +167,13 @@ static int _write_string(const char *string, context *ctx)
 	if (!_write("\"", 1, ctx))
 		return 0;
 	
+	/* escaping */
 	c[0] = '\\';
 	while (c[1] = *p++) {
 		switch (c[1]) {
 		case '\"':
 		case '\\':
+		case '/':
 			goto MyLabel;
 		case '\b':
 			c[1] = 'b';
