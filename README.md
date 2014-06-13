@@ -1,2 +1,2 @@
 ##About
-jsonkit is a lighweight [json](http://json.org) library written in C.
+jsonkit is a lightweight [json](http://json.org) library written in C.
