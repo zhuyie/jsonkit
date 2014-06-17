@@ -11,6 +11,7 @@ static void test_object();
 static void test_array();
 static void test_dotget_clone();
 static void test_write();
+static void test_parser();
 
 int main(int argc, char **argv)
 {
@@ -22,6 +23,7 @@ int main(int argc, char **argv)
 	test_array();
 	test_dotget_clone();
 	test_write();
+	test_parser();
 	return 0;
 }
 
@@ -345,4 +347,40 @@ static void test_write()
 	printf("%s\n", buf);
 
 	json_free(object);
+}
+
+static const char *testJSON = "{ \"foo\": \"bar\", \"null\": null, \"number\": 99.99, \"array\": [ true ] }";
+
+static int my_read(unsigned int index, int len, char *buf)
+{
+	unsigned int json_len = (unsigned int)strlen(testJSON);
+	assert(index + len <= json_len);
+	memcpy(buf, testJSON + index, len);
+	return 1;
+}
+
+static void test_parser()
+{
+	json_parser_config config;
+	json_parser *parser;
+	size_t i, len;
+	int n;
+	json_value *res;
+
+	config.json_str = testJSON;
+	config.json_str_len = 0;
+	parser = json_parser_alloc(20, config);
+	assert(parser);
+
+	for (i = 0, len = strlen(testJSON); i < len; ++i) {
+		int next_char = testJSON[i];
+		n = json_parser_char(parser, next_char);
+		assert(n);
+	}
+	
+	res = json_parser_done(parser);
+	assert(res);
+	json_free(res);
+
+	json_parser_free(parser);
 }

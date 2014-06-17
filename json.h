@@ -105,6 +105,20 @@ typedef struct json_write_config {
 
 int json_write(json_value *v, json_write_config config);
 
+
+struct json_parser;
+typedef struct json_parser json_parser;
+
+typedef struct json_parser_config {
+	const char *json_str;
+	unsigned int json_str_len;
+} json_parser_config;
+
+json_parser* json_parser_alloc(int depth, json_parser_config config);
+int          json_parser_char(json_parser *parser, int next_char);
+json_value*  json_parser_done(json_parser *parser);
+void         json_parser_free(json_parser *parser);
+
 #ifdef __cplusplus
 }
 #endif
