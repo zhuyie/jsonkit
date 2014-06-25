@@ -715,7 +715,7 @@ json_value* json_dotget(json_value *v, const char *dotname)
 	if (v->type != json_type_array && v->type != json_type_object)
 		return NULL;
 
-	while (c = *p) {
+	while ((c = *p)) {
 		if (c == '.')
 			break;
 		p++;
@@ -854,7 +854,7 @@ static void _hash_string(const char *str, unsigned int *len, unsigned int *hash)
 			*hash = ((*hash << 5) + *hash) + c; /* hash * 33 + c */
 		}
 	} else {
-		while (c = *p++) {
+		while ((c = *p++)) {
 			*hash = ((*hash << 5) + *hash) + c; /* hash * 33 + c */
 		}
 		*len = (unsigned int)(p - str - 1);  /* return the length */

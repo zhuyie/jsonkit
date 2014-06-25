@@ -350,7 +350,7 @@ static void test_write()
 }
 
 static const char *testJSON = "{ \"foo\": \"bar\", \"null\": null, \"number\": 99.99, \"array\": [ true ] }";
-
+/*
 static int my_read(unsigned int index, int len, char *buf)
 {
 	unsigned int json_len = (unsigned int)strlen(testJSON);
@@ -358,7 +358,7 @@ static int my_read(unsigned int index, int len, char *buf)
 	memcpy(buf, testJSON + index, len);
 	return 1;
 }
-
+*/
 static void test_parser()
 {
 	json_parser_config config;

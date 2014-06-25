@@ -58,7 +58,6 @@ static int _flush(context *ctx);
 int json_write(json_value *v, json_write_config config)
 {
 	context ctx;
-	int written = 0;
 
 	assert(v);
 	assert(config.write);
@@ -169,7 +168,7 @@ static int _write_string(const char *string, context *ctx)
 	
 	/* escaping */
 	c[0] = '\\';
-	while (c[1] = *p++) {
+	while ((c[1] = *p++)) {
 		switch (c[1]) {
 		case '\"':
 		case '\\':
