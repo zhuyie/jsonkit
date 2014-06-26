@@ -58,6 +58,8 @@ json_value*  json_string_alloc(const char *str, unsigned int len);
 const char*  json_string_get(json_value *v);
 json_value*  json_string_set(json_value *v, const char *str, unsigned int len);
 unsigned int json_string_len(json_value *v);
+json_value*  json_string_resize(json_value *v, unsigned int len, char ch);
+json_value*  json_string_concat(json_value *v, const char *str, unsigned int len);
 
 json_value*  json_number_alloc(double number);
 double       json_number_get(json_value *v);

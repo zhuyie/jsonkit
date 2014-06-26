@@ -59,6 +59,16 @@ static void test_string()
 	len = json_string_len(v);
 	assert(len == 12);
 
+	v = json_string_resize(v, 20, ' ');
+	assert(v);
+	assert(json_string_len(v) == 20);
+	v = json_string_resize(v, 5, ' ');
+	assert(v);
+	assert(json_string_len(v) == 5);
+
+	v = json_string_concat(v, "hello_json", -1);
+	assert(v);
+
 	boolean = json_boolean_get(v);
 	assert(boolean == -1);
 

@@ -221,6 +221,77 @@ unsigned int json_string_len(json_value *v)
 		return string->str.len;
 }
 
+json_value* json_string_resize(json_value *v, unsigned int len, char ch)
+{
+	json_string *string = (json_string*)v;
+	char *ptr;
+	unsigned int i;
+
+	assert(v);
+
+	if (v->type != json_type_string)
+		return NULL;
+	if (len > INT_MAX)
+		return NULL;
+	
+	if (len >= string->capacity) {
+		ptr = string->trailing ? NULL : string->str.ptr;
+		ptr = realloc(ptr, len + 1);
+		if (!ptr)
+			return NULL;
+
+		if (string->trailing)
+			memcpy(ptr, string->trailing_str.str, string->trailing_str.len + 1);
+
+		string->trailing = 0;
+		string->capacity = len + 1;
+		string->str.ptr = ptr;
+	}
+
+	if (string->trailing) {
+		for (i = string->trailing_str.len; i < len; ++i) {
+			string->trailing_str.str[i] = ch;
+		}
+		string->trailing_str.str[len] = '\0';
+		string->trailing_str.len = len;
+	} else {
+		for (i = string->str.len; i < len; ++i) {
+			string->str.ptr[i] = ch;
+		}
+		string->str.ptr[len] = '\0';
+		string->str.len = len;
+	}
+
+	return v;
+}
+
+json_value* json_string_concat(json_value *v, const char *str, unsigned int len)
+{
+	unsigned int old_len;
+	char *ptr;
+
+	assert(v);
+	assert(str);
+
+	if (v->type != json_type_string)
+		return NULL;
+
+	if (len == (unsigned int)-1)
+		len = (unsigned int)strlen(str);
+	
+	if (len) {
+		old_len = json_string_len(v);
+		v = json_string_resize(v, old_len + len, ' ');
+		if (v) {
+			ptr = (char*)json_string_get(v);
+			assert(ptr);
+			memcpy(ptr + old_len, str, len);
+		}
+	}
+
+	return v;
+}
+
 /*----------------------------------------------------------------------------*/
 
 json_value* json_number_alloc(double number)
