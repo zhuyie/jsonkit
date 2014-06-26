@@ -84,7 +84,7 @@ json_value*  json_array_alloc();
 unsigned int json_array_size(json_value *v);
 json_value*  json_array_get(json_value *v, unsigned int index);
 json_value*  json_array_set(json_value *v, unsigned int index, json_value *value);
-#define      json_array_append(array, value)  json_array_set(array, json_array_size(array), value)
+#define      json_array_append(array, value)    json_array_set(array, json_array_size(array), value)
 json_value*  json_array_erase(json_value *v, unsigned int index);
 
 json_value*  json_clone(json_value *v);
