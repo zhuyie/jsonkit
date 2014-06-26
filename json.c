@@ -67,11 +67,11 @@ typedef struct json_number {
 typedef struct _json_name {
 	unsigned int len;
 	unsigned int hash;
-	char str[1];
+	const char *str;
 } _json_name;
 
 typedef struct _json_object_item {
-	_json_name *name;
+	_json_name name;
 	json_value *value;
 } _json_object_item;
 
@@ -91,10 +91,11 @@ typedef struct json_array {
 
 static double _NaN();
 static unsigned int _new_capacity(unsigned int capacity);
-static _json_name* _name_alloc(
+static int _name_alloc(
 	const char *str, 
 	unsigned int len, 
-	unsigned int hash
+	unsigned int hash,
+	_json_name *name
 	);
 static void _name_free(_json_name *name);
 static void _hash_string(
@@ -421,7 +422,7 @@ const char* json_object_name_by_index(json_value *v, unsigned int index)
 	assert(object);
 
 	if (v->type == json_type_object && index < object->size)
-		return object->items[index].name->str;
+		return object->items[index].name.str;
 	else
 		return NULL;
 }
@@ -485,7 +486,6 @@ json_value* json_object_set(json_value *v, const char *name, json_value *value)
 		return v;
 
 	} else {
-		_json_name *n;
 		unsigned int c;
 		_json_object_item *p;
 
@@ -498,13 +498,11 @@ json_value* json_object_set(json_value *v, const char *name, json_value *value)
 			object->items = p;
 		}
 
-		n = _name_alloc(name, len, hash);
-		if (!n)
+		p = object->items + object->size;
+		
+		if (!_name_alloc(name, len, hash, &p->name))
 			return NULL;
-
-		index = object->size;
-		object->items[index].name = n;
-		object->items[index].value = value;
+		p->value = value;
 
 		object->size += 1;
 
@@ -528,7 +526,7 @@ json_value* json_object_erase(json_value *v, const char *name)
 	if (index >= object->size)
 		return NULL;
 
-	_name_free(object->items[index].name);
+	_name_free(&object->items[index].name);
 	json_free(object->items[index].value);
 
 	for (i = index + 1; i < object->size; ++i)
@@ -682,7 +680,7 @@ json_value* json_clone(json_value *v)
 					c = NULL;
 					break;
 				}
-				if (!json_object_set(c, object->items[i].name->str, child_clone)) {
+				if (!json_object_set(c, object->items[i].name.str, child_clone)) {
 					json_free(child_clone);
 					json_free(c);
 					c = NULL;
@@ -751,7 +749,7 @@ void json_free(json_value *v)
 	case json_type_object:
 		object = (json_object*)v;
 		for (i = 0; i < object->size; ++i) {
-			_name_free(object->items[i].name);
+			_name_free(&object->items[i].name);
 			json_free(object->items[i].value);
 		}
 		free(object->items);
@@ -882,28 +880,28 @@ static unsigned int _new_capacity(unsigned int capacity)
 	return capacity;
 }
 
-static _json_name* _name_alloc(const char *str, unsigned int len, unsigned int hash)
+static int _name_alloc(const char *str, unsigned int len, unsigned int hash, _json_name *name)
 {
-	_json_name *name;
-
 	assert(str);
 	assert(len);
+	assert(name);
 
-	name = (_json_name*)malloc(sizeof(_json_name) + len);
-	if (!name)
-		return NULL;
+	name->str = malloc(len + 1);
+	if (!name->str)
+		return 0;
 
 	name->len = len;
 	name->hash = hash;
-	memcpy(name->str, str, len);
-	name->str[len] = '\0';
+	memcpy((void*)name->str, str, len);
+	*(char*)(name->str + len) = '\0';
 
-	return name;
+	return 1;
 }
 
 static void _name_free(_json_name *name)
 {
-	free(name);
+	free((void*)name->str);
+	name->str = NULL;
 }
 
 static void _hash_string(const char *str, unsigned int *len, unsigned int *hash)
@@ -945,9 +943,9 @@ static unsigned int _name_to_index(
 	assert(name);
 
 	for (i = 0; i < object->size; ++i) {
-		if (object->items[i].name->len == len &&
-			object->items[i].name->hash == hash &&
-			memcmp(object->items[i].name->str, name, len) == 0)
+		if (object->items[i].name.len == len &&
+			object->items[i].name.hash == hash &&
+			memcmp(object->items[i].name.str, name, len) == 0)
 		{
 			return i;
 		}
