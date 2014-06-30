@@ -64,14 +64,10 @@ typedef struct json_number {
 	double dbl;
 } json_number;
 
-typedef struct _json_name {
-	unsigned int len;
-	unsigned int hash;
-	const char *str;
-} _json_name;
-
 typedef struct _json_object_item {
-	_json_name name;
+	unsigned int name_len;
+	unsigned int name_hash;
+	const char *name_str;
 	json_value *value;
 } _json_object_item;
 
@@ -90,14 +86,19 @@ typedef struct json_array {
 } json_array;
 
 static double _NaN();
-static unsigned int _new_capacity(unsigned int capacity);
-static int _name_alloc(
-	const char *str, 
-	unsigned int len, 
-	unsigned int hash,
-	_json_name *name
+static unsigned int _new_capacity(
+	unsigned int capacity
 	);
-static void _name_free(_json_name *name);
+static int _object_item_init(
+	const char *name_str, 
+	unsigned int name_len, 
+	unsigned int name_hash,
+	json_value *value,
+	_json_object_item *item
+	);
+static void _object_item_cleanup(
+	_json_object_item *item
+	);
 static void _hash_string(
 	const char *str, 
 	unsigned int *len, 
@@ -422,7 +423,7 @@ const char* json_object_name_by_index(json_value *v, unsigned int index)
 	assert(object);
 
 	if (v->type == json_type_object && index < object->size)
-		return object->items[index].name.str;
+		return object->items[index].name_str;
 	else
 		return NULL;
 }
@@ -500,9 +501,8 @@ json_value* json_object_set(json_value *v, const char *name, json_value *value)
 
 		p = object->items + object->size;
 		
-		if (!_name_alloc(name, len, hash, &p->name))
+		if (!_object_item_init(name, len, hash, value, p))
 			return NULL;
-		p->value = value;
 
 		object->size += 1;
 
@@ -526,8 +526,7 @@ json_value* json_object_erase(json_value *v, const char *name)
 	if (index >= object->size)
 		return NULL;
 
-	_name_free(&object->items[index].name);
-	json_free(object->items[index].value);
+	_object_item_cleanup(object->items + index);
 
 	for (i = index + 1; i < object->size; ++i)
 		object->items[i - 1] = object->items[i];
@@ -680,7 +679,7 @@ json_value* json_clone(json_value *v)
 					c = NULL;
 					break;
 				}
-				if (!json_object_set(c, object->items[i].name.str, child_clone)) {
+				if (!json_object_set(c, object->items[i].name_str, child_clone)) {
 					json_free(child_clone);
 					json_free(c);
 					c = NULL;
@@ -748,10 +747,8 @@ void json_free(json_value *v)
 
 	case json_type_object:
 		object = (json_object*)v;
-		for (i = 0; i < object->size; ++i) {
-			_name_free(&object->items[i].name);
-			json_free(object->items[i].value);
-		}
+		for (i = 0; i < object->size; ++i)
+			_object_item_cleanup(object->items + i);
 		free(object->items);
 		free(object);
 		break;
@@ -880,28 +877,42 @@ static unsigned int _new_capacity(unsigned int capacity)
 	return capacity;
 }
 
-static int _name_alloc(const char *str, unsigned int len, unsigned int hash, _json_name *name)
+static int _object_item_init(
+	const char *name_str, 
+	unsigned int name_len, 
+	unsigned int name_hash, 
+	json_value *value, 
+	_json_object_item *item
+	)
 {
-	assert(str);
-	assert(len);
-	assert(name);
+	assert(name_str);
+	assert(name_len);
+	assert(value);
+	assert(item);
 
-	name->str = malloc(len + 1);
-	if (!name->str)
+	item->name_str = malloc(name_len + 1);
+	if (!item->name_str)
 		return 0;
 
-	name->len = len;
-	name->hash = hash;
-	memcpy((void*)name->str, str, len);
-	*(char*)(name->str + len) = '\0';
+	item->name_len = name_len;
+	item->name_hash = name_hash;
+	memcpy((void*)item->name_str, name_str, name_len);
+	*(char*)(item->name_str + name_len) = '\0';
+
+	item->value = value;
 
 	return 1;
 }
 
-static void _name_free(_json_name *name)
+static void _object_item_cleanup(_json_object_item *item)
 {
-	free((void*)name->str);
-	name->str = NULL;
+	free((void*)item->name_str);
+	item->name_str = NULL;
+	item->name_len = 0;
+	item->name_hash = 0;
+	
+	json_free(item->value);
+	item->value = NULL;
 }
 
 static void _hash_string(const char *str, unsigned int *len, unsigned int *hash)
@@ -943,9 +954,9 @@ static unsigned int _name_to_index(
 	assert(name);
 
 	for (i = 0; i < object->size; ++i) {
-		if (object->items[i].name.len == len &&
-			object->items[i].name.hash == hash &&
-			memcmp(object->items[i].name.str, name, len) == 0)
+		if (object->items[i].name_len == len &&
+			object->items[i].name_hash == hash &&
+			memcmp(object->items[i].name_str, name, len) == 0)
 		{
 			return i;
 		}
