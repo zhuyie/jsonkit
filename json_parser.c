@@ -655,6 +655,10 @@ static int _change_state(json_parser *parser, int next_state)
 			/* begin of string in object_value */
 			assert(top_stack_item->mode == MODE_OBJECT_VALUE);
 			top_stack_item->value_begin = parser->char_index + 1;
+		} else if (parser->state == AR) {
+			/* begin of string in array */
+			assert(top_stack_item->mode == MODE_ARRAY);
+			top_stack_item->value_begin = parser->char_index + 1;
 		}
 	} else if (next_state == CO) {
 		if (parser->state == ST) {
