@@ -45,7 +45,7 @@
 #define BUF_LEN 4096
 
 typedef struct context {
-    json_write_config *config;
+    json_write_config config;
     int written;
     int level;
     unsigned int buf_size;
@@ -62,7 +62,7 @@ int json_write(json_value *v, json_write_config config)
     assert(v);
     assert(config.write);
 
-    ctx.config = &config;
+    ctx.config = config;
     ctx.written = 0;
     ctx.level = 0;
     ctx.buf_size = 0;
@@ -83,14 +83,14 @@ static int _write(const char *str, int len, context *ctx)
     int n;
 
     while (len) {
-        if (ctx->buf_size == BUF_LEN) {
-            if (ctx->config->write(ctx->buf, BUF_LEN) != BUF_LEN)
+        n = BUF_LEN - ctx->buf_size;
+        if (!n) {
+            if (ctx->config.write(ctx->buf, BUF_LEN) != BUF_LEN)
                 return 0;
             ctx->buf_size = 0;
             ctx->written += BUF_LEN;
+            n = BUF_LEN;
         }
-
-        n = BUF_LEN - ctx->buf_size;
         if (n > len)
             n = len;
         
@@ -107,10 +107,10 @@ static int _write(const char *str, int len, context *ctx)
 static int _flush(context *ctx)
 {
     if (ctx->buf_size) {
-        if (ctx->config->write(ctx->buf, ctx->buf_size) != ctx->buf_size)
+        if (ctx->config.write(ctx->buf, ctx->buf_size) != ctx->buf_size)
             return 0;
-        ctx->written += ctx->buf_size;
         ctx->buf_size = 0;
+        ctx->written += ctx->buf_size;
     }
     return 1;
 }
@@ -119,14 +119,14 @@ static int _write_lineend_indent(context *ctx)
 {
     int res;
 
-    if (ctx->config->compact)
+    if (ctx->config.compact)
         return 1;
 
-    res = ctx->config->crlf ? _write("\r\n", 2, ctx) : _write("\n", 1, ctx);
+    res = ctx->config.crlf ? _write("\r\n", 2, ctx) : _write("\n", 1, ctx);
     if (!res)
         return res;
 
-    if (ctx->config->indent > 0 && ctx->level > 0) {
+    if (ctx->config.indent > 0 && ctx->level > 0) {
         static const char* indent_str[8] = {
             " ",
             "  ",
@@ -137,12 +137,12 @@ static int _write_lineend_indent(context *ctx)
             "       ",
             "        "
         };
-        int count = ctx->config->indent * ctx->level, i;
+        int count = ctx->config.indent * ctx->level, i;
         if (count <= 8) {
             res = _write(indent_str[count - 1], count, ctx);
-        } else if (ctx->config->indent <= 8) {
+        } else if (ctx->config.indent <= 8) {
             for (i = 0; i < ctx->level; ++i) {
-                res = _write(indent_str[ctx->config->indent - 1], ctx->config->indent, ctx);
+                res = _write(indent_str[ctx->config.indent - 1], ctx->config.indent, ctx);
                 if (!res)
                     break;
             }
@@ -263,7 +263,7 @@ static int _write_object(json_value *v, context *ctx)
                 return 0;
             if (!_write(":", 1, ctx))
                 return 0;
-            if (!ctx->config->compact && !_write(" ", 1, ctx))
+            if (!ctx->config.compact && !_write(" ", 1, ctx))
                 return 0;
             if (!_json_write(value, ctx))
                 return 0;
