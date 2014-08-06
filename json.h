@@ -33,6 +33,8 @@
 #ifndef _JSONKIT_JSON_H_
 #define _JSONKIT_JSON_H_
 
+#include <stddef.h>
+
 /*----------------------------------------------------------------------------*/
 
 #ifdef __cplusplus
