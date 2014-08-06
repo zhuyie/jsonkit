@@ -227,34 +227,34 @@ typedef enum modes {
 } modes;
 
 typedef struct json_parser_stack_item {
-	modes mode;
-	json_value *value;
-	unsigned int name_begin;
-	unsigned int name_len;
-	unsigned int value_begin;
+    modes mode;
+    json_value *value;
+    unsigned int name_begin;
+    unsigned int name_len;
+    unsigned int value_begin;
 } json_parser_stack_item;
 
 struct json_parser {
-	int depth;
-	json_parser_config config;
-	unsigned int char_index;
-	int state;
-	int top;
-	json_parser_stack_item *stack;
+    int depth;
+    json_parser_config config;
+    unsigned int char_index;
+    int state;
+    int top;
+    json_parser_stack_item *stack;
 };
 
 static int _push(
-	json_parser *parser, 
-	modes mode
-	);
+    json_parser *parser, 
+    modes mode
+    );
 static int _pop(
-	json_parser *parser, 
-	modes mode
-	);
+    json_parser *parser, 
+    modes mode
+    );
 static int _change_state(
-	json_parser *parser, 
-	int next_state
-	);
+    json_parser *parser, 
+    int next_state
+    );
 
 /*----------------------------------------------------------------------------*/
 
@@ -269,26 +269,26 @@ json_parser* json_parser_alloc(int depth, json_parser_config config)
     JSON text, and then call json_parser_done to obtain the final result.
     These functions are fully reentrant.
 */
-	json_parser *parser;
+    json_parser *parser;
 
-	assert(depth > 1);
-	parser = (json_parser*)malloc(sizeof(json_parser));
-	if (!parser)
-		return NULL;
-	parser->depth = depth;
-	memcpy(&parser->config, &config, sizeof(json_parser_config));
-	parser->state = GO;
-	parser->char_index = 0;
-	parser->top = -1;
-	parser->stack = (json_parser_stack_item*)calloc(depth, sizeof(json_parser_stack_item));
-	if (!parser->stack) {
-		free(parser);
-		return NULL;
-	}
+    assert(depth > 1);
+    parser = (json_parser*)malloc(sizeof(json_parser));
+    if (!parser)
+        return NULL;
+    parser->depth = depth;
+    memcpy(&parser->config, &config, sizeof(json_parser_config));
+    parser->state = GO;
+    parser->char_index = 0;
+    parser->top = -1;
+    parser->stack = (json_parser_stack_item*)calloc(depth, sizeof(json_parser_stack_item));
+    if (!parser->stack) {
+        free(parser);
+        return NULL;
+    }
 
-	_push(parser, MODE_DONE);
+    _push(parser, MODE_DONE);
 
-	return parser;
+    return parser;
 }
 
 int json_parser_char(json_parser *parser, int next_char)
@@ -299,131 +299,131 @@ int json_parser_char(json_parser *parser, int next_char)
     UTF-32. It returns true if things are looking ok so far. If it rejects the
     text, it returns false.
 */
-	int next_class, next_state;
+    int next_class, next_state;
 /*
     Determine the character's class.
 */
-	if (next_char < 0) {
-		return false;
-	}
-	if (next_char >= 128) {
-		next_class = C_ETC;
-	} else {
-		next_class = ascii_class[next_char];
-		if (next_class <= __) {
-			return false;
-		}
-	}
+    if (next_char < 0) {
+        return false;
+    }
+    if (next_char >= 128) {
+        next_class = C_ETC;
+    } else {
+        next_class = ascii_class[next_char];
+        if (next_class <= __) {
+            return false;
+        }
+    }
 /*
     Get the next state from the state transition table.
 */
-	next_state = state_transition_table[parser->state][next_class];
-	if (next_state >= 0) {
+    next_state = state_transition_table[parser->state][next_class];
+    if (next_state >= 0) {
 /*
     Change the state.
 */
-		if (!_change_state(parser, next_state))
-			return false;
-	} else {
+        if (!_change_state(parser, next_state))
+            return false;
+    } else {
 /*
     Or perform one of the actions.
 */
-		switch (next_state) {
+        switch (next_state) {
 /* empty } */
-		case -9:
-			if (!_change_state(parser, OK))
-				return false;
-			if (!_pop(parser, MODE_OBJECT_KEY) || !_pop(parser, MODE_OBJECT))
-				return false;
-			break;
+        case -9:
+            if (!_change_state(parser, OK))
+                return false;
+            if (!_pop(parser, MODE_OBJECT_KEY) || !_pop(parser, MODE_OBJECT))
+                return false;
+            break;
 
 /* } */ case -8:
-			if (!_change_state(parser, OK))
-				return false;
-			if (!_pop(parser, MODE_OBJECT_VALUE) || !_pop(parser, MODE_OBJECT))
-				return false;
-			break;
+            if (!_change_state(parser, OK))
+                return false;
+            if (!_pop(parser, MODE_OBJECT_VALUE) || !_pop(parser, MODE_OBJECT))
+                return false;
+            break;
 
 /* ] */ case -7:
-			if (!_change_state(parser, OK))
-				return false;
-			if (!_pop(parser, MODE_ARRAY))
-				return false;
-			break;
+            if (!_change_state(parser, OK))
+                return false;
+            if (!_pop(parser, MODE_ARRAY))
+                return false;
+            break;
 
 /* { */ case -6:
-			if (!_change_state(parser, OB))
-				return false;
-			if (!_push(parser, MODE_OBJECT) || !_push(parser, MODE_OBJECT_KEY))
-				return false;
-			break;
+            if (!_change_state(parser, OB))
+                return false;
+            if (!_push(parser, MODE_OBJECT) || !_push(parser, MODE_OBJECT_KEY))
+                return false;
+            break;
 
 /* [ */ case -5:
-			if (!_change_state(parser, AR))
-				return false;
-			if (!_push(parser, MODE_ARRAY))
-				return false;
-			break;
+            if (!_change_state(parser, AR))
+                return false;
+            if (!_push(parser, MODE_ARRAY))
+                return false;
+            break;
 
 /* " */ case -4:
-			switch (parser->stack[parser->top].mode) {
-			case MODE_OBJECT_KEY:
-				if (!_change_state(parser, CO))
-					return false;
-				break;
-			case MODE_ARRAY:
-			case MODE_OBJECT_VALUE:
-				if (!_change_state(parser, OK))
-					return false;
-				break;
-			default:
-				return false;
-			}
-			break;
+            switch (parser->stack[parser->top].mode) {
+            case MODE_OBJECT_KEY:
+                if (!_change_state(parser, CO))
+                    return false;
+                break;
+            case MODE_ARRAY:
+            case MODE_OBJECT_VALUE:
+                if (!_change_state(parser, OK))
+                    return false;
+                break;
+            default:
+                return false;
+            }
+            break;
 
 /* , */ case -3:
-			switch (parser->stack[parser->top].mode) {
-			case MODE_OBJECT_VALUE:
+            switch (parser->stack[parser->top].mode) {
+            case MODE_OBJECT_VALUE:
 /*
     A comma causes a flip from object_value mode to object_key mode.
 */
-				if (!_change_state(parser, KE))
-					return false;
-				if (!_pop(parser, MODE_OBJECT_VALUE) || !_push(parser, MODE_OBJECT_KEY))
-					return false;
-				break;
-			case MODE_ARRAY:
-				if (!_change_state(parser, VA))
-					return false;
-				break;
-			default:
-				return false;
-			}
-			break;
+                if (!_change_state(parser, KE))
+                    return false;
+                if (!_pop(parser, MODE_OBJECT_VALUE) || !_push(parser, MODE_OBJECT_KEY))
+                    return false;
+                break;
+            case MODE_ARRAY:
+                if (!_change_state(parser, VA))
+                    return false;
+                break;
+            default:
+                return false;
+            }
+            break;
 
 /* : */ case -2:
 /*
     A colon causes a flip from object_key mode to object_value mode.
 */
-			if (!_change_state(parser, VA))
-				return false;
-			if (!_pop(parser, MODE_OBJECT_KEY) || !_push(parser, MODE_OBJECT_VALUE))
-				return false;
-			break;
+            if (!_change_state(parser, VA))
+                return false;
+            if (!_pop(parser, MODE_OBJECT_KEY) || !_push(parser, MODE_OBJECT_VALUE))
+                return false;
+            break;
 /*
     Bad action.
 */
-		default:
-			return false;
-		}
-	}
+        default:
+            return false;
+        }
+    }
 
-	parser->char_index++;
+    parser->char_index++;
 
-	if (parser->config.json_str)
-		parser->config.json_str_len++;
+    if (parser->config.json_str)
+        parser->config.json_str_len++;
 
-	return true;
+    return true;
 }
 
 json_value* json_parser_done(json_parser *parser)
@@ -434,78 +434,78 @@ json_value* json_parser_done(json_parser *parser)
     true. This function returns a new json_value object if the JSON
     text was accepted.
 */
-	json_value *result;
+    json_value *result;
 
-	if (parser->state != OK || parser->top != 0)
-		return NULL;
-	if (parser->stack[0].mode != MODE_DONE || !parser->stack[0].value)
-		return NULL;
+    if (parser->state != OK || parser->top != 0)
+        return NULL;
+    if (parser->stack[0].mode != MODE_DONE || !parser->stack[0].value)
+        return NULL;
 
-	result = parser->stack[0].value;
-	_pop(parser, MODE_DONE);
+    result = parser->stack[0].value;
+    _pop(parser, MODE_DONE);
 
-	return result;
+    return result;
 }
 
 void json_parser_free(json_parser *parser)
 {
-	int i;
+    int i;
 
-	if (!parser)
-		return;
+    if (!parser)
+        return;
 
-	for (i = parser->top; i >=0 ; --i) {
-		json_free(parser->stack[i].value);
-	}
-	free(parser->stack);
-	free(parser);
+    for (i = parser->top; i >=0 ; --i) {
+        json_free(parser->stack[i].value);
+    }
+    free(parser->stack);
+    free(parser);
 }
 
 /*----------------------------------------------------------------------------*/
 
 static json_value* _create_string_value(
-	json_parser_config *config, 
-	unsigned int index, 
-	unsigned int len
-	)
+    json_parser_config *config, 
+    unsigned int index, 
+    unsigned int len
+    )
 {
-	if (config->json_str && index + len <= config->json_str_len) {
-		return json_string_alloc(config->json_str + index, len);
-	}
-	return NULL;
+    if (config->json_str && index + len <= config->json_str_len) {
+        return json_string_alloc(config->json_str + index, len);
+    }
+    return NULL;
 }
 
 static json_value* _create_number_value(
-	json_parser_config *config, 
-	unsigned int index, 
-	unsigned int len
-	)
+    json_parser_config *config, 
+    unsigned int index, 
+    unsigned int len
+    )
 {
-	char tmp[50];
-	double dbl;
+    char tmp[50];
+    double dbl;
 
-	if (config->json_str && len > 0 && len < 50 && index + len <= config->json_str_len) {
-		memcpy(tmp, config->json_str + index, len);
-		tmp[len] = '\0';
-		dbl = atof(tmp);
-		return json_number_alloc(dbl);
-	}
-	return NULL;
+    if (config->json_str && len > 0 && len < 50 && index + len <= config->json_str_len) {
+        memcpy(tmp, config->json_str + index, len);
+        tmp[len] = '\0';
+        dbl = atof(tmp);
+        return json_number_alloc(dbl);
+    }
+    return NULL;
 }
 
 static unsigned int _get_object_name(
-	json_parser_config *config,
-	unsigned int index,
-	unsigned int len,
-	char name[MAX_NAME_LEN]
-	)
+    json_parser_config *config,
+    unsigned int index,
+    unsigned int len,
+    char name[MAX_NAME_LEN]
+    )
 {
-	if (config->json_str && len > 0 && len < MAX_NAME_LEN && index + len <= config->json_str_len) {
-		memcpy(name, config->json_str + index, len);
-		name[len] = '\0';
-		return len;
-	}
-	return 0;
+    if (config->json_str && len > 0 && len < MAX_NAME_LEN && index + len <= config->json_str_len) {
+        memcpy(name, config->json_str + index, len);
+        name[len] = '\0';
+        return len;
+    }
+    return 0;
 }
 
 static int _push(json_parser *parser, modes mode)
@@ -513,34 +513,34 @@ static int _push(json_parser *parser, modes mode)
 /*
     Push a mode onto the stack. Return false if there is overflow.
 */
-	json_value *v;
-	json_parser_stack_item *top_stack_item;
+    json_value *v;
+    json_parser_stack_item *top_stack_item;
 
-	parser->top += 1;
-	if (parser->top >= parser->depth) {
-		return false;
-	}
+    parser->top += 1;
+    if (parser->top >= parser->depth) {
+        return false;
+    }
 
-	top_stack_item = parser->stack + parser->top;
-	top_stack_item->mode = mode;
-	top_stack_item->value = NULL;
-	top_stack_item->name_begin = 0;
-	top_stack_item->name_len = 0;
-	top_stack_item->value_begin = 0;
+    top_stack_item = parser->stack + parser->top;
+    top_stack_item->mode = mode;
+    top_stack_item->value = NULL;
+    top_stack_item->name_begin = 0;
+    top_stack_item->name_len = 0;
+    top_stack_item->value_begin = 0;
 
-	if (mode == MODE_ARRAY) {
-		v = json_array_alloc();
-		if (!v)
-			return false;
-		top_stack_item->value = v;
-	} else if (mode == MODE_OBJECT) {
-		v = json_object_alloc();
-		if (!v)
-			return false;
-		top_stack_item->value = v;
-	}
+    if (mode == MODE_ARRAY) {
+        v = json_array_alloc();
+        if (!v)
+            return false;
+        top_stack_item->value = v;
+    } else if (mode == MODE_OBJECT) {
+        v = json_object_alloc();
+        if (!v)
+            return false;
+        top_stack_item->value = v;
+    }
 
-	return true;
+    return true;
 }
 
 static int _pop(json_parser *parser, modes mode)
@@ -549,167 +549,167 @@ static int _pop(json_parser *parser, modes mode)
     Pop the stack, assuring that the current mode matches the expectation.
     Return false if there is underflow or if the modes mismatch.
 */
-	json_parser_stack_item *top_stack_item, *parent_stack_item;
-	json_value *v, *parent;
-	modes parent_mode;
-	char name[MAX_NAME_LEN];
+    json_parser_stack_item *top_stack_item, *parent_stack_item;
+    json_value *v, *parent;
+    modes parent_mode;
+    char name[MAX_NAME_LEN];
 
-	if (parser->top < 0 || parser->stack[parser->top].mode != mode) {
-		return false;
-	}
+    if (parser->top < 0 || parser->stack[parser->top].mode != mode) {
+        return false;
+    }
 
-	top_stack_item = parser->stack + parser->top;
+    top_stack_item = parser->stack + parser->top;
 
-	if (parser->top > 0) {
-		parent_stack_item = parser->stack + parser->top - 1;
-		v = top_stack_item->value;
-		parent = parent_stack_item->value;
-		parent_mode = parent_stack_item->mode;
-		
-		if (mode == MODE_ARRAY || mode == MODE_OBJECT) {
-			assert(v);
-			if (parent_mode == MODE_OBJECT_VALUE || parent_mode == MODE_DONE) {
-				assert(parent == NULL);
-				/* copy to parent level */
-				parent_stack_item->value = v;
-			} else if (parent_mode == MODE_ARRAY) {
-				assert(parent && json_type(parent) == json_type_array);
-				/* insert v into the array */
-				if (!json_array_set(parent, json_array_size(parent), v))
-					return false;
-			} else {
-				assert(0);
-				return false;
-			}
+    if (parser->top > 0) {
+        parent_stack_item = parser->stack + parser->top - 1;
+        v = top_stack_item->value;
+        parent = parent_stack_item->value;
+        parent_mode = parent_stack_item->mode;
+        
+        if (mode == MODE_ARRAY || mode == MODE_OBJECT) {
+            assert(v);
+            if (parent_mode == MODE_OBJECT_VALUE || parent_mode == MODE_DONE) {
+                assert(parent == NULL);
+                /* copy to parent level */
+                parent_stack_item->value = v;
+            } else if (parent_mode == MODE_ARRAY) {
+                assert(parent && json_type(parent) == json_type_array);
+                /* insert v into the array */
+                if (!json_array_set(parent, json_array_size(parent), v))
+                    return false;
+            } else {
+                assert(0);
+                return false;
+            }
 
-		} else if (mode == MODE_OBJECT_KEY) {
-			if (parent && parent_mode == MODE_OBJECT) {
-				/* copy to parent level */
-				parent_stack_item->name_begin = top_stack_item->name_begin;
-				parent_stack_item->name_len = top_stack_item->name_len;
-			} else {
-				assert(0);
-				return false;
-			}
+        } else if (mode == MODE_OBJECT_KEY) {
+            if (parent && parent_mode == MODE_OBJECT) {
+                /* copy to parent level */
+                parent_stack_item->name_begin = top_stack_item->name_begin;
+                parent_stack_item->name_len = top_stack_item->name_len;
+            } else {
+                assert(0);
+                return false;
+            }
 
-		} else if (mode == MODE_OBJECT_VALUE) {
-			assert(v);
-			if (parent && parent_mode == MODE_OBJECT) {
-				/* insert v into the object */
-				if (!_get_object_name(&parser->config, 
-						parent_stack_item->name_begin, 
-						parent_stack_item->name_len, 
-						name)
-					)
-					return false;
-				if (!json_object_set(parent, name, v))
-					return false;
-			} else {
-				assert(0);
-				return false;
-			}
-		}
-	}
+        } else if (mode == MODE_OBJECT_VALUE) {
+            assert(v);
+            if (parent && parent_mode == MODE_OBJECT) {
+                /* insert v into the object */
+                if (!_get_object_name(&parser->config, 
+                        parent_stack_item->name_begin, 
+                        parent_stack_item->name_len, 
+                        name)
+                    )
+                    return false;
+                if (!json_object_set(parent, name, v))
+                    return false;
+            } else {
+                assert(0);
+                return false;
+            }
+        }
+    }
 
-	memset(top_stack_item, 0, sizeof(json_parser_stack_item));
-	parser->top -= 1;
+    memset(top_stack_item, 0, sizeof(json_parser_stack_item));
+    parser->top -= 1;
     
-	return true;
+    return true;
 }
 
 static int _change_state(json_parser *parser, int next_state)
 {
-	json_parser_stack_item *top_stack_item = parser->stack + parser->top;
-	int value_end = 0;
-	json_value *v = NULL, *parent;
+    json_parser_stack_item *top_stack_item = parser->stack + parser->top;
+    int value_end = 0;
+    json_value *v = NULL, *parent;
 
-	if (next_state == OK) {
-		if (parser->state == N3) {
-			/* null */
-			value_end = 1;
-			v = json_null_alloc();
-		} else if (parser->state == T3) {
-			/* true */
-			value_end = 1;
-			v = json_boolean_alloc(1);
-		} else if (parser->state == F4) {
-			/* false */
-			value_end = 1;
-			v = json_boolean_alloc(0);
-		} else if (parser->state == ST) {
-			/* end of string in object_value or array */
-			assert(top_stack_item->value_begin > 0);
-			value_end = 1;
-			v = _create_string_value(
-					&parser->config, 
-					top_stack_item->value_begin, 
-					parser->char_index - top_stack_item->value_begin
-				);
-		}
-	} else if (next_state == ST) {
-		if (parser->state == OB || parser->state == KE) {
-			/* begin of string in object_name */
-			assert(top_stack_item->mode == MODE_OBJECT_KEY);
-			top_stack_item->name_begin = parser->char_index + 1;
-		} else if (parser->state == VA) {
-			/* begin of string in object_value */
-			assert(top_stack_item->mode == MODE_OBJECT_VALUE);
-			top_stack_item->value_begin = parser->char_index + 1;
-		} else if (parser->state == AR) {
-			/* begin of string in array */
-			assert(top_stack_item->mode == MODE_ARRAY);
-			top_stack_item->value_begin = parser->char_index + 1;
-		}
-	} else if (next_state == CO) {
-		if (parser->state == ST) {
-			/* end of string in object_name */
-			assert(top_stack_item->mode == MODE_OBJECT_KEY);
-			top_stack_item->name_len = parser->char_index - top_stack_item->name_begin;
-		}
-	}
+    if (next_state == OK) {
+        if (parser->state == N3) {
+            /* null */
+            value_end = 1;
+            v = json_null_alloc();
+        } else if (parser->state == T3) {
+            /* true */
+            value_end = 1;
+            v = json_boolean_alloc(1);
+        } else if (parser->state == F4) {
+            /* false */
+            value_end = 1;
+            v = json_boolean_alloc(0);
+        } else if (parser->state == ST) {
+            /* end of string in object_value or array */
+            assert(top_stack_item->value_begin > 0);
+            value_end = 1;
+            v = _create_string_value(
+                    &parser->config, 
+                    top_stack_item->value_begin, 
+                    parser->char_index - top_stack_item->value_begin
+                );
+        }
+    } else if (next_state == ST) {
+        if (parser->state == OB || parser->state == KE) {
+            /* begin of string in object_name */
+            assert(top_stack_item->mode == MODE_OBJECT_KEY);
+            top_stack_item->name_begin = parser->char_index + 1;
+        } else if (parser->state == VA) {
+            /* begin of string in object_value */
+            assert(top_stack_item->mode == MODE_OBJECT_VALUE);
+            top_stack_item->value_begin = parser->char_index + 1;
+        } else if (parser->state == AR) {
+            /* begin of string in array */
+            assert(top_stack_item->mode == MODE_ARRAY);
+            top_stack_item->value_begin = parser->char_index + 1;
+        }
+    } else if (next_state == CO) {
+        if (parser->state == ST) {
+            /* end of string in object_name */
+            assert(top_stack_item->mode == MODE_OBJECT_KEY);
+            top_stack_item->name_len = parser->char_index - top_stack_item->name_begin;
+        }
+    }
 
-	if (parser->state == VA || parser->state == AR) {
-		if (next_state == MI || next_state == ZE || next_state == IN) {
-			/* begin of number */
-			assert(top_stack_item->mode == MODE_OBJECT_VALUE || top_stack_item->mode == MODE_ARRAY);
-			top_stack_item->value_begin = parser->char_index;
-		}
-	} else if (parser->state == FR || parser->state == IN || parser->state == ZE || parser->state == E3) {
-		if (next_state == OK || next_state == KE || next_state == VA) {
-			/* end of number */
-			assert(top_stack_item->value_begin > 0);
-			value_end = 1;
-			v = _create_number_value(
-					&parser->config,
-					top_stack_item->value_begin,
-					parser->char_index - top_stack_item->value_begin
-				);
-		}
-	}
+    if (parser->state == VA || parser->state == AR) {
+        if (next_state == MI || next_state == ZE || next_state == IN) {
+            /* begin of number */
+            assert(top_stack_item->mode == MODE_OBJECT_VALUE || top_stack_item->mode == MODE_ARRAY);
+            top_stack_item->value_begin = parser->char_index;
+        }
+    } else if (parser->state == FR || parser->state == IN || parser->state == ZE || parser->state == E3) {
+        if (next_state == OK || next_state == KE || next_state == VA) {
+            /* end of number */
+            assert(top_stack_item->value_begin > 0);
+            value_end = 1;
+            v = _create_number_value(
+                    &parser->config,
+                    top_stack_item->value_begin,
+                    parser->char_index - top_stack_item->value_begin
+                );
+        }
+    }
 
-	if (value_end) {
-		if (!v)
-			return false;
-		
-		if (top_stack_item->mode == MODE_ARRAY) {
-			/* insert v into the array */
-			parent = top_stack_item->value;
-			assert(parent && json_type(parent) == json_type_array);
-			if (!json_array_set(parent, json_array_size(parent), v))
-				return false;
-		
-		} else if (top_stack_item->mode == MODE_OBJECT_VALUE) {
-			/* record v into the stack */
-			assert(top_stack_item->value == NULL);
-			top_stack_item->value = v;
-		
-		} else {
-			assert(0);
-			json_free(v);
-			return false;
-		}
-	}
+    if (value_end) {
+        if (!v)
+            return false;
+        
+        if (top_stack_item->mode == MODE_ARRAY) {
+            /* insert v into the array */
+            parent = top_stack_item->value;
+            assert(parent && json_type(parent) == json_type_array);
+            if (!json_array_set(parent, json_array_size(parent), v))
+                return false;
+        
+        } else if (top_stack_item->mode == MODE_OBJECT_VALUE) {
+            /* record v into the stack */
+            assert(top_stack_item->value == NULL);
+            top_stack_item->value = v;
+        
+        } else {
+            assert(0);
+            json_free(v);
+            return false;
+        }
+    }
 
-	parser->state = next_state;
-	return true;
+    parser->state = next_state;
+    return true;
 }

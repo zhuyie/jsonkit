@@ -40,13 +40,13 @@ extern "C" {
 #endif
 
 typedef enum json_value_type {
-	json_type_string = 1,
-	json_type_number,
-	json_type_true,
-	json_type_false,
-	json_type_null,
-	json_type_object,
-	json_type_array
+    json_type_string = 1,
+    json_type_number,
+    json_type_true,
+    json_type_false,
+    json_type_null,
+    json_type_object,
+    json_type_array
 } json_value_type;
 
 struct json_value;
@@ -100,10 +100,10 @@ json_value*  json_dotget_array(json_value *v, const char *dotname);
 
 
 typedef struct json_write_config {
-	int compact;  	/* compact mode */
-	int indent;     /* indent levels(number of spaces) */
-	int crlf;       /* \r\n or \n */
-	int (*write)(const char *buf, int len);
+    int compact;    /* compact mode */
+    int indent;     /* indent levels(number of spaces) */
+    int crlf;       /* \r\n or \n */
+    int (*write)(const char *buf, int len);
 } json_write_config;
 
 int json_write(json_value *v, json_write_config config);
@@ -113,8 +113,8 @@ struct json_parser;
 typedef struct json_parser json_parser;
 
 typedef struct json_parser_config {
-	const char *json_str;
-	unsigned int json_str_len;
+    const char *json_str;
+    unsigned int json_str_len;
 } json_parser_config;
 
 json_parser* json_parser_alloc(int depth, json_parser_config config);
