@@ -986,4 +986,3 @@ static unsigned int _str_to_index(const char *str, unsigned int len)
 
     return num;
 }
-
