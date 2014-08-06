@@ -470,7 +470,7 @@ static json_value* _create_string_value(
     )
 {
     if (config->json_str && index + len <= config->json_str_len) {
-        return json_string_alloc(config->json_str + index, len);
+        return json_string_alloc(config->json_str + index, len, NULL);
     }
     return NULL;
 }
@@ -488,7 +488,7 @@ static json_value* _create_number_value(
         memcpy(tmp, config->json_str + index, len);
         tmp[len] = '\0';
         dbl = atof(tmp);
-        return json_number_alloc(dbl);
+        return json_number_alloc(dbl, NULL);
     }
     return NULL;
 }
@@ -529,12 +529,12 @@ static int _push(json_parser *parser, modes mode)
     top_stack_item->value_begin = 0;
 
     if (mode == MODE_ARRAY) {
-        v = json_array_alloc();
+        v = json_array_alloc(NULL);
         if (!v)
             return false;
         top_stack_item->value = v;
     } else if (mode == MODE_OBJECT) {
-        v = json_object_alloc();
+        v = json_object_alloc(NULL);
         if (!v)
             return false;
         top_stack_item->value = v;
@@ -627,15 +627,15 @@ static int _change_state(json_parser *parser, int next_state)
         if (parser->state == N3) {
             /* null */
             value_end = 1;
-            v = json_null_alloc();
+            v = json_null_alloc(NULL);
         } else if (parser->state == T3) {
             /* true */
             value_end = 1;
-            v = json_boolean_alloc(1);
+            v = json_boolean_alloc(1, NULL);
         } else if (parser->state == F4) {
             /* false */
             value_end = 1;
-            v = json_boolean_alloc(0);
+            v = json_boolean_alloc(0, NULL);
         } else if (parser->state == ST) {
             /* end of string in object_value or array */
             assert(top_stack_item->value_begin > 0);

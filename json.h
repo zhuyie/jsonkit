@@ -49,30 +49,33 @@ typedef enum json_value_type {
     json_type_array
 } json_value_type;
 
+typedef void* (*json_alloc_func)(void *ptr, size_t osize, size_t nsize);
+
 struct json_value;
 typedef struct json_value json_value;
 
 json_value_type json_type(json_value *v);
+json_alloc_func json_get_alloc_func(json_value *v);
 
-json_value*  json_string_alloc(const char *str, unsigned int len);
+json_value*  json_string_alloc(const char *str, unsigned int len, json_alloc_func alloc_func);
 const char*  json_string_get(json_value *v);
 json_value*  json_string_set(json_value *v, const char *str, unsigned int len);
 unsigned int json_string_len(json_value *v);
 json_value*  json_string_resize(json_value *v, unsigned int len, char ch);
 json_value*  json_string_concat(json_value *v, const char *str, unsigned int len);
 
-json_value*  json_number_alloc(double number);
+json_value*  json_number_alloc(double number, json_alloc_func alloc_func);
 double       json_number_get(json_value *v);
 #define      json_number_get_type(v, type)    (type)json_number_get(v)
 json_value*  json_number_set(json_value *v, double dbl);
 
-json_value*  json_boolean_alloc(int boolean);
+json_value*  json_boolean_alloc(int boolean, json_alloc_func alloc_func);
 int          json_boolean_get(json_value *v);
 json_value*  json_boolean_set(json_value *v, int boolean);
 
-json_value*  json_null_alloc();
+json_value*  json_null_alloc(json_alloc_func alloc_func);
 
-json_value*  json_object_alloc();
+json_value*  json_object_alloc(json_alloc_func alloc_func);
 unsigned int json_object_size(json_value *v);
 const char*  json_object_name_by_index(json_value *v, unsigned int index);
 json_value*  json_object_value_by_index(json_value *v, unsigned int index);
@@ -80,14 +83,14 @@ json_value*  json_object_get(json_value *v, const char *name);
 json_value*  json_object_set(json_value *v, const char *name, json_value *value);
 json_value*  json_object_erase(json_value *v, const char *name);
 
-json_value*  json_array_alloc();
+json_value*  json_array_alloc(json_alloc_func alloc_func);
 unsigned int json_array_size(json_value *v);
 json_value*  json_array_get(json_value *v, unsigned int index);
 json_value*  json_array_set(json_value *v, unsigned int index, json_value *value);
 #define      json_array_append(array, value)    json_array_set(array, json_array_size(array), value)
 json_value*  json_array_erase(json_value *v, unsigned int index);
 
-json_value*  json_clone(json_value *v);
+json_value*  json_clone(json_value *v, json_alloc_func alloc_func);
 
 void         json_free(json_value *v);
 

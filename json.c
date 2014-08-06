@@ -40,27 +40,30 @@
 /*----------------------------------------------------------------------------*/
 
 struct json_value {
-    json_value_type type;
+    json_alloc_func alloc_func;
+    unsigned char type;
 };
 
 typedef struct json_string {
-    json_value_type type;
-    unsigned int trailing : 1;
-    unsigned int capacity : 31;
+    json_alloc_func alloc_func;
+    unsigned char type;
+    unsigned char trailing;
+    unsigned short trailing_extra_cb;
+    unsigned int len;
     union {
         struct {
-            unsigned int len;
             char str[1];
         } trailing_str;
         struct {
             char *ptr;
-            unsigned int len;
+            unsigned int capacity;
         } str;
     };
 } json_string;
 
 typedef struct json_number {
-    json_value_type type;
+    json_alloc_func alloc_func;
+    unsigned char type;
     double dbl;
 } json_number;
 
@@ -72,19 +75,26 @@ typedef struct _json_object_item {
 } _json_object_item;
 
 typedef struct json_object {
-    json_value_type type;
+    json_alloc_func alloc_func;
+    unsigned char type;
     unsigned int capacity;
     _json_object_item *items;
     unsigned int size;
 } json_object;
 
 typedef struct json_array {
-    json_value_type type;
+    json_alloc_func alloc_func;
+    unsigned char type;
     unsigned int capacity;
     json_value **values;
     unsigned int size;
 } json_array;
 
+static void* _default_alloc_func(
+    void *ptr, 
+    size_t osize, 
+    size_t nsize
+    );
 static double _NaN();
 static unsigned int _new_capacity(
     unsigned int capacity
@@ -94,10 +104,12 @@ static int _object_item_init(
     unsigned int name_len, 
     unsigned int name_hash,
     json_value *value,
-    _json_object_item *item
+    _json_object_item *item,
+    json_alloc_func alloc_func
     );
 static void _object_item_cleanup(
-    _json_object_item *item
+    _json_object_item *item,
+    json_alloc_func alloc_func
     );
 static void _hash_string(
     const char *str, 
@@ -123,35 +135,71 @@ json_value_type json_type(json_value *v)
     return v->type;
 }
 
+json_alloc_func json_get_alloc_func(json_value *v)
+{
+    assert(v);
+    return v->alloc_func;
+}
+
 /*----------------------------------------------------------------------------*/
 
-json_value* json_string_alloc(const char *str, unsigned int len)
+const static unsigned int _json_string_builtin_string_cb = 
+    (unsigned int)(sizeof(json_string) - offsetof(json_string, trailing_str));
+
+json_value* json_string_alloc(const char *str, unsigned int len, json_alloc_func alloc_func)
 {
     json_string *string;
     unsigned int extra_cb;
 
     assert(str);
     
+    if (!alloc_func)
+        alloc_func = _default_alloc_func;
+
     if (len == (unsigned int)-1)
         len = (unsigned int)strlen(str);
-    if (len > INT_MAX)
+    if (len == UINT_MAX)
         return NULL;
 
-    if (len < sizeof(char*))
-        extra_cb = 0;
-    else
-        extra_cb = len - sizeof(char*) + 1;
+    if (len < USHRT_MAX) {
+        if (len < _json_string_builtin_string_cb)
+            extra_cb = 0;
+        else
+            extra_cb = len - _json_string_builtin_string_cb + 1;
 
-    string = (json_string*)malloc(sizeof(json_string) + extra_cb);
-    if (!string)
-        return NULL;
-        
-    string->type = json_type_string;
-    string->trailing = 1;
-    string->capacity = (unsigned int)(sizeof(char*) + extra_cb);
-    string->trailing_str.len = len;
-    memcpy(string->trailing_str.str, str, len);
-    string->trailing_str.str[len] = '\0';
+        string = (json_string*)alloc_func(NULL, 0, sizeof(json_string) + extra_cb);
+        if (!string)
+            return NULL;
+
+        memcpy(string->trailing_str.str, str, len);
+        string->trailing_str.str[len] = '\0';
+
+        string->alloc_func = alloc_func;
+        string->type = json_type_string;
+        string->trailing = 1;
+        string->trailing_extra_cb = extra_cb;
+        string->len = len;
+
+    } else {
+        string = (json_string*)alloc_func(NULL, 0, sizeof(json_string));
+        if (!string)
+            return NULL;
+
+        string->str.ptr = alloc_func(NULL, 0, len + 1);
+        if (!string->str.ptr) {
+            alloc_func(string, sizeof(json_string), 0);
+            return NULL;
+        }
+        memcpy(string->str.ptr, str, len);
+        string->str.ptr[len] = '\0';
+
+        string->alloc_func = alloc_func;
+        string->type = json_type_string;
+        string->trailing = 0;
+        string->trailing_extra_cb = 0;
+        string->len = len;
+        string->str.capacity = len;
+    }
 
     return (json_value*)string;
 }
@@ -170,7 +218,9 @@ const char* json_string_get(json_value *v)
 json_value* json_string_set(json_value *v, const char *str, unsigned int len)
 {
     json_string *string = (json_string*)v;
+    unsigned int capacity;
     char *ptr;
+    size_t osize;
 
     assert(v);
     assert(str);
@@ -180,31 +230,35 @@ json_value* json_string_set(json_value *v, const char *str, unsigned int len)
 
     if (len == (unsigned int)-1)
         len = (unsigned int)strlen(str);
-    if (len > INT_MAX)
+    if (len == UINT_MAX)
         return NULL;
 
-    if (len >= string->capacity) {
-        ptr = string->trailing ? NULL : string->str.ptr;
-        ptr = realloc(ptr, len + 1);
+    if (string->trailing) {
+        capacity = _json_string_builtin_string_cb + string->trailing_extra_cb - 1;
+    } else {
+        capacity = string->str.capacity;
+    }
+    if (len > capacity) {
+        if (string->trailing) {
+            ptr = NULL;
+            osize = 0;
+        } else {
+            ptr = string->str.ptr;
+            osize = capacity + 1;
+        }
+        ptr = string->alloc_func(ptr, osize, len + 1);
         if (!ptr)
             return NULL;
         
         string->trailing = 0;
-        string->capacity = len + 1;
         string->str.ptr = ptr;
+        string->str.capacity = len;
     }
 
-    if (string->trailing) {
-        ptr = string->trailing_str.str;
-        memcpy(ptr, str, len);
-        ptr[len] = '\0';
-        string->trailing_str.len = len;
-    } else {
-        ptr = string->str.ptr;
-        memcpy(ptr, str, len);
-        ptr[len] = '\0';
-        string->str.len = len;
-    }
+    ptr = string->trailing ? string->trailing_str.str : string->str.ptr;
+    memcpy(ptr, str, len);
+    ptr[len] = '\0';
+    string->len = len;
 
     return v;
 }
@@ -217,52 +271,52 @@ unsigned int json_string_len(json_value *v)
     if (v->type != json_type_string)
         return (unsigned int)-1;
 
-    if (string->trailing)
-        return string->trailing_str.len;
-    else
-        return string->str.len;
+    return string->len;
 }
 
 json_value* json_string_resize(json_value *v, unsigned int len, char ch)
 {
     json_string *string = (json_string*)v;
+    unsigned int capacity;
     char *ptr;
+    size_t osize;
     unsigned int i;
 
     assert(v);
 
     if (v->type != json_type_string)
         return NULL;
-    if (len > INT_MAX)
+    if (len == UINT_MAX)
         return NULL;
     
-    if (len >= string->capacity) {
-        ptr = string->trailing ? NULL : string->str.ptr;
-        ptr = realloc(ptr, len + 1);
+    if (string->trailing) {
+        capacity = _json_string_builtin_string_cb + string->trailing_extra_cb - 1;
+    } else {
+        capacity = string->str.capacity;
+    }
+    if (len > capacity) {
+        if (string->trailing) {
+            ptr = NULL;
+            osize = 0;
+        } else {
+            ptr = string->str.ptr;
+            osize = capacity + 1;
+        }
+        ptr = string->alloc_func(ptr, osize, len + 1);
         if (!ptr)
             return NULL;
 
-        if (string->trailing)
-            memcpy(ptr, string->trailing_str.str, string->trailing_str.len + 1);
-
         string->trailing = 0;
-        string->capacity = len + 1;
         string->str.ptr = ptr;
+        string->str.capacity = len;
     }
 
-    if (string->trailing) {
-        for (i = string->trailing_str.len; i < len; ++i) {
-            string->trailing_str.str[i] = ch;
-        }
-        string->trailing_str.str[len] = '\0';
-        string->trailing_str.len = len;
-    } else {
-        for (i = string->str.len; i < len; ++i) {
-            string->str.ptr[i] = ch;
-        }
-        string->str.ptr[len] = '\0';
-        string->str.len = len;
+    ptr = string->trailing ? string->trailing_str.str : string->str.ptr;
+    for (i = string->len; i < len; ++i) {
+        ptr[i] = ch;
     }
+    ptr[len] = '\0';
+    string->len = len;
 
     return v;
 }
@@ -296,14 +350,18 @@ json_value* json_string_concat(json_value *v, const char *str, unsigned int len)
 
 /*----------------------------------------------------------------------------*/
 
-json_value* json_number_alloc(double number)
+json_value* json_number_alloc(double number, json_alloc_func alloc_func)
 {
     json_number *v;
 
-    v = (json_number*)malloc(sizeof(json_number));
+    if (!alloc_func)
+        alloc_func = _default_alloc_func;
+
+    v = (json_number*)alloc_func(NULL, 0, sizeof(json_number));
     if (!v)
         return NULL;
 
+    v->alloc_func = alloc_func;
     v->type = json_type_number;
     v->dbl = number;
 
@@ -336,14 +394,18 @@ json_value* json_number_set(json_value *v, double dbl)
 
 /*----------------------------------------------------------------------------*/
 
-json_value* json_boolean_alloc(int boolean)
+json_value* json_boolean_alloc(int boolean, json_alloc_func alloc_func)
 {
     json_value *v;
 
-    v = (json_value*)malloc(sizeof(json_value));
+    if (!alloc_func)
+        alloc_func = _default_alloc_func;
+
+    v = (json_value*)alloc_func(NULL, 0, sizeof(json_value));
     if (!v)
         return NULL;
 
+    v->alloc_func = alloc_func;
     v->type = boolean ? json_type_true : json_type_false;
 
     return v;
@@ -375,14 +437,18 @@ json_value* json_boolean_set(json_value *v, int boolean)
 
 /*----------------------------------------------------------------------------*/
 
-json_value* json_null_alloc()
+json_value* json_null_alloc(json_alloc_func alloc_func)
 {
     json_value *v;
 
-    v = (json_value*)malloc(sizeof(json_value));
+    if (!alloc_func)
+        alloc_func = _default_alloc_func;
+
+    v = (json_value*)alloc_func(NULL, 0, sizeof(json_value));
     if (!v)
         return NULL;
 
+    v->alloc_func = alloc_func;
     v->type = json_type_null;
 
     return v;
@@ -390,14 +456,18 @@ json_value* json_null_alloc()
 
 /*----------------------------------------------------------------------------*/
 
-json_value* json_object_alloc()
+json_value* json_object_alloc(json_alloc_func alloc_func)
 {
     json_object *object;
 
-    object = (json_object*)malloc(sizeof(json_object));
+    if (!alloc_func)
+        alloc_func = _default_alloc_func;
+
+    object = (json_object*)alloc_func(NULL, 0, sizeof(json_object));
     if (!object)
         return NULL;
 
+    object->alloc_func = alloc_func;
     object->type = json_type_object;
     object->capacity = 0;
     object->items = NULL;
@@ -492,7 +562,11 @@ json_value* json_object_set(json_value *v, const char *name, json_value *value)
 
         if (object->size == object->capacity) {
             c = _new_capacity(object->capacity);
-            p = (_json_object_item*)realloc(object->items, sizeof(_json_object_item) * c);
+            p = (_json_object_item*)object->alloc_func(
+                object->items, 
+                sizeof(_json_object_item) * object->capacity, 
+                sizeof(_json_object_item) * c
+                );
             if (!p)
                 return NULL;
             object->capacity = c;
@@ -501,7 +575,7 @@ json_value* json_object_set(json_value *v, const char *name, json_value *value)
 
         p = object->items + object->size;
         
-        if (!_object_item_init(name, len, hash, value, p))
+        if (!_object_item_init(name, len, hash, value, p, object->alloc_func))
             return NULL;
 
         object->size += 1;
@@ -526,7 +600,7 @@ json_value* json_object_erase(json_value *v, const char *name)
     if (index >= object->size)
         return NULL;
 
-    _object_item_cleanup(object->items + index);
+    _object_item_cleanup(object->items + index, v->alloc_func);
 
     for (i = index + 1; i < object->size; ++i)
         object->items[i - 1] = object->items[i];
@@ -538,14 +612,18 @@ json_value* json_object_erase(json_value *v, const char *name)
 
 /*----------------------------------------------------------------------------*/
 
-json_value* json_array_alloc()
+json_value* json_array_alloc(json_alloc_func alloc_func)
 {
     json_array *array;
 
-    array = (json_array*)malloc(sizeof(json_array));
+    if (!alloc_func)
+        alloc_func = _default_alloc_func;
+
+    array = (json_array*)alloc_func(NULL, 0, sizeof(json_array));
     if (!array)
         return NULL;
     
+    array->alloc_func = alloc_func;
     array->type = json_type_array;
     array->capacity = 0;
     array->values = NULL;
@@ -591,7 +669,11 @@ json_value* json_array_set(json_value *v, unsigned int index, json_value *value)
             json_value **p;
 
             c = _new_capacity(array->capacity);
-            p = (json_value**)realloc(array->values, sizeof(json_value*) * c);
+            p = (json_value**)array->alloc_func(
+                array->values, 
+                sizeof(json_value*) * array->capacity,
+                sizeof(json_value*) * c
+                );
             if (!p)
                 return NULL;
             array->values = p;
@@ -634,7 +716,7 @@ json_value* json_array_erase(json_value *v, unsigned int index)
 
 /*----------------------------------------------------------------------------*/
 
-json_value* json_clone(json_value *v)
+json_value* json_clone(json_value *v, json_alloc_func alloc_func)
 {
     json_value *c = NULL;
     json_string *string;
@@ -649,31 +731,33 @@ json_value* json_clone(json_value *v)
     {
     case json_type_string:
         string = (json_string*)v;
-        if (string->trailing)
-            c = json_string_alloc(string->trailing_str.str, string->trailing_str.len);
-        else
-            c = json_string_alloc(string->str.ptr, string->str.len);
+        c = json_string_alloc(
+            string->trailing ? string->trailing_str.str : string->str.ptr, 
+            string->len, 
+            alloc_func
+            );
         break;
 
     case json_type_number:
         number = (json_number*)v;
-        c = json_number_alloc(number->dbl);
+        c = json_number_alloc(number->dbl, alloc_func);
         break;
 
     case json_type_true:
     case json_type_false:
+        c = json_boolean_alloc(v->type == json_type_true, alloc_func);
+        break;
+
     case json_type_null:
-        c = (json_value*)malloc(sizeof(json_value));
-        if (c)
-            c->type = v->type;
+        c = json_null_alloc(alloc_func);
         break;
 
     case json_type_object:
         object = (json_object*)v;
-        c = json_object_alloc();
+        c = json_object_alloc(alloc_func);
         if (c) {
             for (i = 0; i < object->size; ++i) {
-                json_value *child_clone = json_clone(object->items[i].value);
+                json_value *child_clone = json_clone(object->items[i].value, alloc_func);
                 if (!child_clone) {
                     json_free(c);
                     c = NULL;
@@ -691,10 +775,10 @@ json_value* json_clone(json_value *v)
 
     case json_type_array:
         array = (json_array*)v;
-        c = json_array_alloc();
+        c = json_array_alloc(alloc_func);
         if (c) {
             for (i = 0; i < array->size; ++i) {
-                json_value *child_clone = json_clone(array->values[i]);
+                json_value *child_clone = json_clone(array->values[i], alloc_func);
                 if (!child_clone) {
                     json_free(c);
                     c = NULL;
@@ -734,31 +818,34 @@ void json_free(json_value *v)
     case json_type_string:
         string = (json_string*)v;
         if (!string->trailing)
-            free(string->str.ptr);
-        free(string);
+            v->alloc_func(string->str.ptr, string->str.capacity + 1, 0);
+        v->alloc_func(string, sizeof(json_string) + string->trailing_extra_cb, 0);
         break;
 
     case json_type_number:
+        v->alloc_func(v, sizeof(json_number), 0);
+        break;
+
     case json_type_true:
     case json_type_false:
     case json_type_null:
-        free(v);
+        v->alloc_func(v, sizeof(json_value), 0);
         break;
 
     case json_type_object:
         object = (json_object*)v;
         for (i = 0; i < object->size; ++i)
-            _object_item_cleanup(object->items + i);
-        free(object->items);
-        free(object);
+            _object_item_cleanup(object->items + i, v->alloc_func);
+        v->alloc_func(object->items, sizeof(_json_object_item) * object->capacity, 0);
+        v->alloc_func(object, sizeof(json_object), 0);
         break;
 
     case json_type_array:
         array = (json_array*)v;
         for (i = 0; i < array->size; ++i)
             json_free(array->values[i]);
-        free(array->values);
-        free(array);
+        v->alloc_func(array->values, sizeof(json_value*) * array->capacity, 0);
+        v->alloc_func(array, sizeof(json_array), 0);
         break;
 
     default:
@@ -858,6 +945,12 @@ json_value* json_dotget_array(json_value *v, const char *dotname)
 
 /*----------------------------------------------------------------------------*/
 
+static void* _default_alloc_func(void *ptr, size_t osize, size_t nsize)
+{
+    (void)osize;
+    return realloc(ptr, nsize);
+}
+
 static double _NaN()
 {
     /* assuming sizeof(unsigned)=4 && sizeof(double)=8 and Little-Endian */
@@ -882,7 +975,8 @@ static int _object_item_init(
     unsigned int name_len, 
     unsigned int name_hash, 
     json_value *value, 
-    _json_object_item *item
+    _json_object_item *item,
+    json_alloc_func alloc_func
     )
 {
     assert(name_str);
@@ -890,7 +984,7 @@ static int _object_item_init(
     assert(value);
     assert(item);
 
-    item->name_str = malloc(name_len + 1);
+    item->name_str = alloc_func(NULL, 0, name_len + 1);
     if (!item->name_str)
         return 0;
 
@@ -904,9 +998,9 @@ static int _object_item_init(
     return 1;
 }
 
-static void _object_item_cleanup(_json_object_item *item)
+static void _object_item_cleanup(_json_object_item *item, json_alloc_func alloc_func)
 {
-    free((void*)item->name_str);
+    alloc_func((void*)item->name_str, item->name_len + 1, 0);
     item->name_str = NULL;
     item->name_len = 0;
     item->name_hash = 0;

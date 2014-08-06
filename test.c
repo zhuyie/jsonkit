@@ -35,7 +35,7 @@ static void test_string()
     unsigned int len;
     int boolean;
 
-    v = json_string_alloc("hello", (unsigned int)-1);
+    v = json_string_alloc("hello", (unsigned int)-1, NULL);
     assert(v);
     type = json_type(v);
     assert(type == json_type_string);
@@ -83,7 +83,7 @@ static void test_number()
     unsigned short u2;
     const char *str;
 
-    v = json_number_alloc(42);
+    v = json_number_alloc(42, NULL);
     assert(v);
     type = json_type(v);
     assert(type == json_type_number);
@@ -109,7 +109,7 @@ static void test_boolean()
     json_value_type type;
     int boolean;
 
-    v = json_boolean_alloc(1);
+    v = json_boolean_alloc(1, NULL);
     assert(v);
     
     type = json_type(v);
@@ -133,7 +133,7 @@ static void test_null()
     json_value *v;
     json_value_type type;
 
-    v = json_null_alloc();
+    v = json_null_alloc(NULL);
     assert(v);
     type = json_type(v);
     assert(type == json_type_null);
@@ -148,7 +148,7 @@ static void test_object()
     unsigned int i;
     char name[2] = { 0 };
 
-    v = json_object_alloc();
+    v = json_object_alloc(NULL);
     assert(v);
     type = json_type(v);
     assert(type == json_type_object);
@@ -160,7 +160,7 @@ static void test_object()
     assert(v2 == NULL);
 
     for (i = 0; i < 10; ++i) {
-        v2 = json_number_alloc(i + 1);
+        v2 = json_number_alloc(i + 1, NULL);
         assert(v2);
         name[0] = '0' + i;
         v = json_object_set(v, name, v2);
@@ -174,7 +174,7 @@ static void test_object()
     assert(json_type(v2) == json_type_number);
     assert(json_number_get(v2) == 9);
 
-    v2 = json_string_alloc("master yoda", (unsigned int)-1);
+    v2 = json_string_alloc("master yoda", (unsigned int)-1, NULL);
     assert(v2);
     v = json_object_set(v, "3", v2);
     assert(v != NULL);
@@ -198,7 +198,7 @@ static void test_array()
     unsigned int size;
     unsigned int i;
 
-    v = json_array_alloc();
+    v = json_array_alloc(NULL);
     assert(v);
     type = json_type(v);
     assert(type == json_type_array);
@@ -209,7 +209,7 @@ static void test_array()
     assert(v2 == NULL);
 
     for (i = 0; i < 100; ++i) {
-        v2 = json_boolean_alloc(i % 2);
+        v2 = json_boolean_alloc(i % 2, NULL);
         assert(v2);
         v = json_array_set(v, i, v2);
         assert(v);
@@ -221,7 +221,7 @@ static void test_array()
     assert(v2);
     assert(json_type(v2) == json_type_false);
 
-    v2 = json_string_alloc("hello world", (unsigned int)-1);
+    v2 = json_string_alloc("hello world", (unsigned int)-1, NULL);
     assert(v2);
     v = json_array_set(v, 2, v2);
     assert(v);
@@ -243,12 +243,12 @@ static void test_dotget_clone()
     unsigned int i;
     int boolean;
 
-    object = json_object_alloc();
+    object = json_object_alloc(NULL);
     assert(object);
-    array = json_array_alloc();
+    array = json_array_alloc(NULL);
     assert(array);
     for (i = 0; i < 10; ++i) {
-        v = json_boolean_alloc(i % 2);
+        v = json_boolean_alloc(i % 2, NULL);
         assert(v);
         v = json_array_set(array, i, v);
         assert(v);
@@ -272,7 +272,7 @@ static void test_dotget_clone()
     boolean = json_dotget_boolean(object, "abc.[999]");
     assert(boolean == -1);
 
-    v = json_clone(object);
+    v = json_clone(object, NULL);
     assert(v);
     json_free(v);
 
@@ -295,25 +295,25 @@ static void test_write()
     unsigned int i;
     json_write_config write_config;
 
-    object = json_object_alloc();
+    object = json_object_alloc(NULL);
     assert(object);
     
-    v = json_string_alloc("bar\"123\"", (unsigned int)-1);
+    v = json_string_alloc("bar\"123\"", (unsigned int)-1, NULL);
     assert(v);
     object = json_object_set(object, "foo\txxx\\yyy\nzzz", v);
     assert(object);
     
-    v = json_number_alloc(0);
+    v = json_number_alloc(0, NULL);
     assert(v);
     object = json_object_set(object, "num1", v);
     assert(object);
     
-    v = json_number_alloc(99.99);
+    v = json_number_alloc(99.99, NULL);
     assert(v);
     object = json_object_set(object, "num2", v);
     assert(object);
     
-    v = json_boolean_alloc(0);
+    v = json_boolean_alloc(0, NULL);
     assert(v);
     object = json_object_set(object, "bool", v);
     assert(object);
@@ -323,22 +323,22 @@ static void test_write()
     object = json_object_set(object, "null", v);
     assert(object);
     
-    v = json_array_alloc();
+    v = json_array_alloc(NULL);
     assert(v);
     object = json_object_set(object, "empty_array", v);
     assert(object);
     
-    v = json_object_alloc();
+    v = json_object_alloc(NULL);
     assert(v);
     object = json_object_set(object, "empty_object", v);
     assert(object);
     
-    v = json_array_alloc();
+    v = json_array_alloc(NULL);
     assert(v);
     for (i = 0; i < 10; ++i) {
-        v1 = json_object_alloc();
+        v1 = json_object_alloc(NULL);
         assert(v1);
-        v2 = json_boolean_alloc(i % 2);
+        v2 = json_boolean_alloc(i % 2, NULL);
         assert(v2);
         v1 = json_object_set(v1, "test", v2);
         assert(v1);
