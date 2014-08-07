@@ -46,9 +46,9 @@ struct json_value {
 typedef struct json_string {
     json_alloc_func alloc_func;
     unsigned char type;
-    /* json_string在创建时会赋初值，之后可能会再修改，但几率不会很大。
-       为了优化这种情况，设置了一个trailing模式，在这种模式下字符串会跟随着json_string
-       结构体作为一整块内存分配出来，减少内存分配上的开销及提高访问效率。*/
+    /* We provide a initial string to alloc the json_string. after that, we can 
+       modify the json_string but rarely. Trailing mode can optimize this case. 
+       In trailing mode, we only alloc 1 memory block, both for the json_string struct and the string data. */
     unsigned char trailing;
     unsigned short trailing_extra_cb;
     unsigned int len;
@@ -145,7 +145,7 @@ json_alloc_func json_get_alloc_func(json_value *v)
 
 /*----------------------------------------------------------------------------*/
 
-/* json_string结构体内可供trailing模式字符串使用的字节数 */
+/* count of bytes inside the json_string structure which can be used by trailing mode */
 const static unsigned int _json_string_builtin_string_cb = 
     (unsigned int)(sizeof(json_string) - offsetof(json_string, trailing_str));
 
@@ -164,8 +164,8 @@ json_value* json_string_alloc(const char *str, unsigned int len, json_alloc_func
     if (len == UINT_MAX)
         return NULL;
 
-    /* 长度小于65536时用trailing模式，否则用普通模式 */
     if (len < USHRT_MAX) {
+        /* trailing mode */
         if (len < _json_string_builtin_string_cb)
             extra_cb = 0;
         else
@@ -185,6 +185,7 @@ json_value* json_string_alloc(const char *str, unsigned int len, json_alloc_func
         string->len = len;
 
     } else {
+        /* normal mode */
         string = (json_string*)alloc_func(NULL, 0, sizeof(json_string));
         if (!string)
             return NULL;
@@ -237,7 +238,7 @@ json_value* json_string_set(json_value *v, const char *str, unsigned int len)
     if (len == UINT_MAX)
         return NULL;
 
-    /* 检查是否有足够空间存放新字符串，没有就重新分配一块足够大的 */
+    /* check if we have enough space to hold the new string */
     if (string->trailing) {
         capacity = _json_string_builtin_string_cb + string->trailing_extra_cb - 1;
     } else {
@@ -294,7 +295,7 @@ json_value* json_string_resize(json_value *v, unsigned int len, char ch)
     if (len == UINT_MAX)
         return NULL;
     
-    /* 检查是否有足够空间存放长度len的字符串，没有就重新分配一块足够大的 */
+    /* check if we have enough space to hold the new string */
     if (string->trailing) {
         capacity = _json_string_builtin_string_cb + string->trailing_extra_cb - 1;
     } else {
@@ -319,7 +320,7 @@ json_value* json_string_resize(json_value *v, unsigned int len, char ch)
 
     ptr = string->trailing ? string->trailing_str.str : string->str.ptr;
     for (i = string->len; i < len; ++i) {
-        ptr[i] = ch;  /* 新增的字符被填充为ch */
+        ptr[i] = ch;  /* new characters are filled with ch */
     }
     ptr[len] = '\0';
     string->len = len;
@@ -548,23 +549,21 @@ json_value* json_object_set(json_value *v, const char *name, json_value *value)
     assert(object);
     assert(name);
 
-    if (!value)
-        return NULL;
-    if (v->type != json_type_object)
+    if (v->type != json_type_object || !value)
         return NULL;
 
     _hash_string(name, &len, &hash);
     index = _name_to_index(object, name, len, hash);
     
     if (index < object->size) {
-        /* 对一个已有的key赋新值 */
+        /* assign a new value to a exist key */
         assert(object->items[index].value);
         json_free(object->items[index].value);
         object->items[index].value = value;
         return v;
 
     } else {
-        /* 设置一组新的key/value */
+        /* insert a new key/value pair */
         unsigned int c;
         _json_object_item *p;
 
@@ -670,7 +669,7 @@ json_value* json_array_set(json_value *v, unsigned int index, json_value *value)
         return NULL;
 
     if (index == array->size) {
-        /* 新增一个value */
+        /* insert a new value */
         if (array->size == array->capacity) {
             unsigned int c;
             json_value **p;
@@ -693,7 +692,7 @@ json_value* json_array_set(json_value *v, unsigned int index, json_value *value)
         return v;
     
     } else {
-        /* 对一个已有的index赋新值 */
+        /* assign a new value to a exist index */
         assert(array->values[index]);
         json_free(array->values[index]);
         array->values[index] = value;
