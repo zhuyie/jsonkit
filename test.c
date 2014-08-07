@@ -145,8 +145,8 @@ static void test_object()
     json_value *v, *v2;
     json_value_type type;
     unsigned int size;
-    unsigned int i;
-    char name[2] = { 0 };
+    int i;
+    const char* names[10] = { "5", "8", "2", "0", "1", "3", "7", "4", "6", "9" };
 
     v = json_object_alloc(NULL);
     assert(v);
@@ -162,8 +162,7 @@ static void test_object()
     for (i = 0; i < 10; ++i) {
         v2 = json_number_alloc(i + 1, NULL);
         assert(v2);
-        name[0] = '0' + i;
-        v = json_object_set(v, name, v2);
+        v = json_object_set(v, names[i], v2);
         assert(v);
     }
     size = json_object_size(v);
@@ -172,7 +171,7 @@ static void test_object()
     v2 = json_object_get(v, "8");
     assert(v2 != NULL);
     assert(json_type(v2) == json_type_number);
-    assert(json_number_get(v2) == 9);
+    assert(json_number_get(v2) == 2);
 
     v2 = json_string_alloc("master yoda", (unsigned int)-1, NULL);
     assert(v2);

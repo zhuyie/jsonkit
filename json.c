@@ -70,6 +70,7 @@ typedef struct json_number {
 } json_number;
 
 typedef struct _json_object_item {
+    int sorted_index;
     unsigned int name_len;
     unsigned int name_hash;
     const char *name_str;
@@ -79,9 +80,9 @@ typedef struct _json_object_item {
 typedef struct json_object {
     json_alloc_func alloc_func;
     unsigned char type;
-    unsigned int capacity;
+    int capacity;
     _json_object_item *items;
-    unsigned int size;
+    int size;
 } json_object;
 
 typedef struct json_array {
@@ -113,16 +114,22 @@ static void _object_item_cleanup(
     _json_object_item *item,
     json_alloc_func alloc_func
     );
+static int _object_item_index_lower_bound(
+    _json_object_item *items,
+    int count,
+    unsigned int hash
+    );
 static void _hash_string(
     const char *str, 
     unsigned int *len, 
     unsigned int *hash
     );
-static unsigned int _name_to_index(
+static int _name_to_index(
     json_object *object, 
     const char *name, 
     unsigned int len, 
-    unsigned int hash
+    unsigned int hash,
+    int *lower_bound
     );
 static unsigned int _str_to_index(
     const char *str, 
@@ -499,7 +506,7 @@ const char* json_object_name_by_index(json_value *v, unsigned int index)
     json_object *object = (json_object*)v;
     assert(object);
 
-    if (v->type == json_type_object && index < object->size)
+    if (v->type == json_type_object && index < (unsigned int)object->size)
         return object->items[index].name_str;
     else
         return NULL;
@@ -510,7 +517,7 @@ json_value* json_object_value_by_index(json_value *v, unsigned int index)
     json_object *object = (json_object*)v;
     assert(object);
 
-    if (v->type == json_type_object && index < object->size)
+    if (v->type == json_type_object && index < (unsigned int)object->size)
         return object->items[index].value;
     else
         return NULL;
@@ -520,7 +527,8 @@ static
 json_value* _json_object_get(json_value *v, const char *name, unsigned int len)
 {
     json_object *object = (json_object*)v;
-    unsigned int hash, index;
+    unsigned int hash;
+    int index, lower_bound;
 
     assert(object);
     assert(name);
@@ -529,7 +537,7 @@ json_value* _json_object_get(json_value *v, const char *name, unsigned int len)
         return NULL;
 
     _hash_string(name, &len, &hash);
-    index = _name_to_index(object, name, len, hash);
+    index = _name_to_index(object, name, len, hash, &lower_bound);
     if (index >= object->size)
         return NULL;
 
@@ -544,7 +552,8 @@ json_value* json_object_get(json_value *v, const char *name)
 json_value* json_object_set(json_value *v, const char *name, json_value *value)
 {
     json_object *object = (json_object*)v;
-    unsigned int len = (unsigned int)-1, hash, index;
+    unsigned int len = (unsigned int)-1, hash;
+    int index, lower_bound, i;
 
     assert(object);
     assert(name);
@@ -553,7 +562,7 @@ json_value* json_object_set(json_value *v, const char *name, json_value *value)
         return NULL;
 
     _hash_string(name, &len, &hash);
-    index = _name_to_index(object, name, len, hash);
+    index = _name_to_index(object, name, len, hash, &lower_bound);
     
     if (index < object->size) {
         /* assign a new value to a exist key */
@@ -564,25 +573,34 @@ json_value* json_object_set(json_value *v, const char *name, json_value *value)
 
     } else {
         /* insert a new key/value pair */
-        unsigned int c;
-        _json_object_item *p;
+        assert(index == object->size);
+        assert(lower_bound >= 0 && lower_bound <= object->size);
 
         if (object->size == object->capacity) {
-            c = _new_capacity(object->capacity);
-            p = (_json_object_item*)object->alloc_func(  /* realloc */
+            unsigned int capacity;
+            _json_object_item *items;
+            
+            capacity = _new_capacity(object->capacity);
+            items = (_json_object_item*)object->alloc_func(  /* realloc */
                 object->items, 
                 sizeof(_json_object_item) * object->capacity, 
-                sizeof(_json_object_item) * c
+                sizeof(_json_object_item) * capacity
                 );
-            if (!p)
+            if (!items)
                 return NULL;
-            object->capacity = c;
-            object->items = p;
+
+            object->capacity = capacity;
+            object->items = items;
         }
 
-        p = object->items + object->size;
-        if (!_object_item_init(name, len, hash, value, p, object->alloc_func))
+        if (!_object_item_init(name, len, hash, value, 
+                object->items + object->size, object->alloc_func)) {
             return NULL;
+        }
+
+        for (i = object->size; i > lower_bound; --i)
+            object->items[i].sorted_index = object->items[i - 1].sorted_index;
+        object->items[lower_bound].sorted_index = object->size;
 
         object->size += 1;
 
@@ -593,7 +611,8 @@ json_value* json_object_set(json_value *v, const char *name, json_value *value)
 json_value* json_object_erase(json_value *v, const char *name)
 {
     json_object *object = (json_object*)v;
-    unsigned int len = (unsigned int)-1, hash, i, index;
+    unsigned int len = (unsigned int)-1, hash;
+    int i, index, lower_bound;
 
     assert(object);
     assert(name);
@@ -602,7 +621,7 @@ json_value* json_object_erase(json_value *v, const char *name)
         return NULL;
 
     _hash_string(name, &len, &hash);
-    index = _name_to_index(object, name, len, hash);
+    index = _name_to_index(object, name, len, hash, &lower_bound);
     if (index >= object->size)
         return NULL;
 
@@ -762,7 +781,7 @@ json_value* json_clone(json_value *v, json_alloc_func alloc_func)
         object = (json_object*)v;
         clone = json_object_alloc(alloc_func);
         if (clone) {
-            for (i = 0; i < object->size; ++i) {
+            for (i = 0; i < (unsigned int)object->size; ++i) {
                 json_value *child_clone = json_clone(object->items[i].value, alloc_func);
                 if (!child_clone) {
                     json_free(clone);
@@ -840,7 +859,7 @@ void json_free(json_value *v)
 
     case json_type_object:
         object = (json_object*)v;
-        for (i = 0; i < object->size; ++i)
+        for (i = 0; i < (unsigned int)object->size; ++i)
             _object_item_cleanup(object->items + i, v->alloc_func);
         v->alloc_func(object->items, sizeof(_json_object_item) * object->capacity, 0);
         v->alloc_func(object, sizeof(json_object), 0);
@@ -991,6 +1010,8 @@ static int _object_item_init(
     assert(item);
     assert(alloc_func);
 
+    item->sorted_index = -1;
+
     item->name_str = alloc_func(NULL, 0, name_len + 1);
     if (!item->name_str)
         return 0;
@@ -1016,6 +1037,34 @@ static void _object_item_cleanup(_json_object_item *item, json_alloc_func alloc_
     
     json_free(item->value);
     item->value = NULL;
+}
+
+static int _object_item_index_lower_bound(
+    _json_object_item *items,
+    int count,
+    unsigned int hash
+    )
+{
+    _json_object_item *first, *middle;
+    int len, half;
+
+    first = items;
+    len = count;
+
+    while (len > 0) {
+        half = len >> 1;
+        middle = first + half;
+        assert(middle->sorted_index >= 0 && middle->sorted_index < count);
+        if (items[middle->sorted_index].name_hash < hash) {
+            first = middle + 1;
+            len = len - half - 1;
+        } else {
+            len = half;
+        }
+    }
+
+    assert(first >= items && first <= items + count);
+    return (int)(first - items);
 }
 
 static void _hash_string(const char *str, unsigned int *len, unsigned int *hash)
@@ -1044,27 +1093,32 @@ static void _hash_string(const char *str, unsigned int *len, unsigned int *hash)
     }
 }
 
-static unsigned int _name_to_index(
+static int _name_to_index(
     json_object *object, 
     const char *name, 
     unsigned int len, 
-    unsigned int hash
+    unsigned int hash,
+    int *lower_bound
     )
 {
-    unsigned int i;
+    int index, i;
     
     assert(object);
     assert(name);
+    assert(lower_bound);
 
-    for (i = 0; i < object->size; ++i) {
-        if (object->items[i].name_len == len &&
-            object->items[i].name_hash == hash &&
-            memcmp(object->items[i].name_str, name, len) == 0)
-        {
-            return i;
-        }
+    *lower_bound = _object_item_index_lower_bound(object->items, object->size, hash);
+    assert(*lower_bound >= 0 && *lower_bound <= object->size);
+
+    for (i = *lower_bound; i < object->size; ++i) {
+        index = object->items[i].sorted_index;
+        if (object->items[index].name_hash != hash)
+            break;
+        if (object->items[index].name_len == len && memcmp(object->items[index].name_str, name, len) == 0)
+            return index;
     }
-    return (unsigned int)-1;
+
+    return object->size;
 }
 
 static unsigned int _str_to_index(const char *str, unsigned int len)
