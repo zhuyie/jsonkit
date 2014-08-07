@@ -31,7 +31,6 @@
 */
 
 #include "json.h"
-#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
@@ -47,6 +46,9 @@ struct json_value {
 typedef struct json_string {
     json_alloc_func alloc_func;
     unsigned char type;
+    /* json_string在创建时会赋初值，之后可能会再修改，但几率不会很大。
+       为了优化这种情况，设置了一个trailing模式，在这种模式下字符串会跟随着json_string
+       结构体作为一整块内存分配出来，减少内存分配上的开销及提高访问效率。*/
     unsigned char trailing;
     unsigned short trailing_extra_cb;
     unsigned int len;
@@ -143,6 +145,7 @@ json_alloc_func json_get_alloc_func(json_value *v)
 
 /*----------------------------------------------------------------------------*/
 
+/* json_string结构体内可供trailing模式字符串使用的字节数 */
 const static unsigned int _json_string_builtin_string_cb = 
     (unsigned int)(sizeof(json_string) - offsetof(json_string, trailing_str));
 
@@ -161,6 +164,7 @@ json_value* json_string_alloc(const char *str, unsigned int len, json_alloc_func
     if (len == UINT_MAX)
         return NULL;
 
+    /* 长度小于65536时用trailing模式，否则用普通模式 */
     if (len < USHRT_MAX) {
         if (len < _json_string_builtin_string_cb)
             extra_cb = 0;
@@ -233,6 +237,7 @@ json_value* json_string_set(json_value *v, const char *str, unsigned int len)
     if (len == UINT_MAX)
         return NULL;
 
+    /* 检查是否有足够空间存放新字符串，没有就重新分配一块足够大的 */
     if (string->trailing) {
         capacity = _json_string_builtin_string_cb + string->trailing_extra_cb - 1;
     } else {
@@ -246,7 +251,7 @@ json_value* json_string_set(json_value *v, const char *str, unsigned int len)
             ptr = string->str.ptr;
             osize = capacity + 1;
         }
-        ptr = string->alloc_func(ptr, osize, len + 1);
+        ptr = string->alloc_func(ptr, osize, len + 1);  /* realloc */
         if (!ptr)
             return NULL;
         
@@ -289,6 +294,7 @@ json_value* json_string_resize(json_value *v, unsigned int len, char ch)
     if (len == UINT_MAX)
         return NULL;
     
+    /* 检查是否有足够空间存放长度len的字符串，没有就重新分配一块足够大的 */
     if (string->trailing) {
         capacity = _json_string_builtin_string_cb + string->trailing_extra_cb - 1;
     } else {
@@ -302,7 +308,7 @@ json_value* json_string_resize(json_value *v, unsigned int len, char ch)
             ptr = string->str.ptr;
             osize = capacity + 1;
         }
-        ptr = string->alloc_func(ptr, osize, len + 1);
+        ptr = string->alloc_func(ptr, osize, len + 1);  /* realloc */
         if (!ptr)
             return NULL;
 
@@ -313,7 +319,7 @@ json_value* json_string_resize(json_value *v, unsigned int len, char ch)
 
     ptr = string->trailing ? string->trailing_str.str : string->str.ptr;
     for (i = string->len; i < len; ++i) {
-        ptr[i] = ch;
+        ptr[i] = ch;  /* 新增的字符被填充为ch */
     }
     ptr[len] = '\0';
     string->len = len;
@@ -541,8 +547,9 @@ json_value* json_object_set(json_value *v, const char *name, json_value *value)
 
     assert(object);
     assert(name);
-    assert(value);
 
+    if (!value)
+        return NULL;
     if (v->type != json_type_object)
         return NULL;
 
@@ -550,19 +557,20 @@ json_value* json_object_set(json_value *v, const char *name, json_value *value)
     index = _name_to_index(object, name, len, hash);
     
     if (index < object->size) {
-        if (object->items[index].value == value)
-            return NULL;
+        /* 对一个已有的key赋新值 */
+        assert(object->items[index].value);
         json_free(object->items[index].value);
         object->items[index].value = value;
         return v;
 
     } else {
+        /* 设置一组新的key/value */
         unsigned int c;
         _json_object_item *p;
 
         if (object->size == object->capacity) {
             c = _new_capacity(object->capacity);
-            p = (_json_object_item*)object->alloc_func(
+            p = (_json_object_item*)object->alloc_func(  /* realloc */
                 object->items, 
                 sizeof(_json_object_item) * object->capacity, 
                 sizeof(_json_object_item) * c
@@ -574,7 +582,6 @@ json_value* json_object_set(json_value *v, const char *name, json_value *value)
         }
 
         p = object->items + object->size;
-        
         if (!_object_item_init(name, len, hash, value, p, object->alloc_func))
             return NULL;
 
@@ -658,18 +665,18 @@ json_value* json_array_set(json_value *v, unsigned int index, json_value *value)
 {
     json_array *array = (json_array*)v;
     assert(array);
-    assert(value);
 
-    if (v->type != json_type_array || index > array->size)
+    if (v->type != json_type_array || index > array->size || !value)
         return NULL;
 
     if (index == array->size) {
+        /* 新增一个value */
         if (array->size == array->capacity) {
             unsigned int c;
             json_value **p;
 
             c = _new_capacity(array->capacity);
-            p = (json_value**)array->alloc_func(
+            p = (json_value**)array->alloc_func(  /* realloc */
                 array->values, 
                 sizeof(json_value*) * array->capacity,
                 sizeof(json_value*) * c
@@ -686,8 +693,8 @@ json_value* json_array_set(json_value *v, unsigned int index, json_value *value)
         return v;
     
     } else {
-        if (array->values[index] == value)
-            return NULL;
+        /* 对一个已有的index赋新值 */
+        assert(array->values[index]);
         json_free(array->values[index]);
         array->values[index] = value;
         return v;
@@ -718,7 +725,7 @@ json_value* json_array_erase(json_value *v, unsigned int index)
 
 json_value* json_clone(json_value *v, json_alloc_func alloc_func)
 {
-    json_value *c = NULL;
+    json_value *clone = NULL;
     json_string *string;
     json_number *number;
     json_object *object;
@@ -731,7 +738,7 @@ json_value* json_clone(json_value *v, json_alloc_func alloc_func)
     {
     case json_type_string:
         string = (json_string*)v;
-        c = json_string_alloc(
+        clone = json_string_alloc(
             string->trailing ? string->trailing_str.str : string->str.ptr, 
             string->len, 
             alloc_func
@@ -740,33 +747,33 @@ json_value* json_clone(json_value *v, json_alloc_func alloc_func)
 
     case json_type_number:
         number = (json_number*)v;
-        c = json_number_alloc(number->dbl, alloc_func);
+        clone = json_number_alloc(number->dbl, alloc_func);
         break;
 
     case json_type_true:
     case json_type_false:
-        c = json_boolean_alloc(v->type == json_type_true, alloc_func);
+        clone = json_boolean_alloc(v->type == json_type_true, alloc_func);
         break;
 
     case json_type_null:
-        c = json_null_alloc(alloc_func);
+        clone = json_null_alloc(alloc_func);
         break;
 
     case json_type_object:
         object = (json_object*)v;
-        c = json_object_alloc(alloc_func);
-        if (c) {
+        clone = json_object_alloc(alloc_func);
+        if (clone) {
             for (i = 0; i < object->size; ++i) {
                 json_value *child_clone = json_clone(object->items[i].value, alloc_func);
                 if (!child_clone) {
-                    json_free(c);
-                    c = NULL;
+                    json_free(clone);
+                    clone = NULL;
                     break;
                 }
-                if (!json_object_set(c, object->items[i].name_str, child_clone)) {
+                if (!json_object_set(clone, object->items[i].name_str, child_clone)) {
                     json_free(child_clone);
-                    json_free(c);
-                    c = NULL;
+                    json_free(clone);
+                    clone = NULL;
                     break;
                 }
             }
@@ -775,19 +782,19 @@ json_value* json_clone(json_value *v, json_alloc_func alloc_func)
 
     case json_type_array:
         array = (json_array*)v;
-        c = json_array_alloc(alloc_func);
-        if (c) {
+        clone = json_array_alloc(alloc_func);
+        if (clone) {
             for (i = 0; i < array->size; ++i) {
                 json_value *child_clone = json_clone(array->values[i], alloc_func);
                 if (!child_clone) {
-                    json_free(c);
-                    c = NULL;
+                    json_free(clone);
+                    clone = NULL;
                     break;
                 }
-                if (!json_array_set(c, i, child_clone)) {
+                if (!json_array_set(clone, i, child_clone)) {
                     json_free(child_clone);
-                    json_free(c);
-                    c = NULL;
+                    json_free(clone);
+                    clone = NULL;
                     break;
                 }
             }
@@ -798,7 +805,7 @@ json_value* json_clone(json_value *v, json_alloc_func alloc_func)
         assert(0);
     }
 
-    return c;
+    return clone;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -962,10 +969,10 @@ static unsigned int _new_capacity(unsigned int capacity)
 {
     if (capacity == 0)
         capacity = 4;
-    else if (capacity < 64)
+    else if (capacity < 1024)
         capacity *= 2;
     else
-        capacity += 64;
+        capacity += 1024;
 
     return capacity;
 }
@@ -983,11 +990,11 @@ static int _object_item_init(
     assert(name_len);
     assert(value);
     assert(item);
+    assert(alloc_func);
 
     item->name_str = alloc_func(NULL, 0, name_len + 1);
     if (!item->name_str)
         return 0;
-
     item->name_len = name_len;
     item->name_hash = name_hash;
     memcpy((void*)item->name_str, name_str, name_len);
@@ -1000,6 +1007,9 @@ static int _object_item_init(
 
 static void _object_item_cleanup(_json_object_item *item, json_alloc_func alloc_func)
 {
+    assert(item);
+    assert(alloc_func);
+
     alloc_func((void*)item->name_str, item->name_len + 1, 0);
     item->name_str = NULL;
     item->name_len = 0;
@@ -1025,11 +1035,11 @@ static void _hash_string(const char *str, unsigned int *len, unsigned int *hash)
     if (*len != (unsigned int)-1) {
         for (i = 0; i < *len; ++i) {
             c = *p++;
-            *hash = ((*hash << 5) + *hash) + c; /* hash * 33 + c */
+            *hash = ((*hash << 5) + *hash) + c;
         }
     } else {
         while ((c = *p++)) {
-            *hash = ((*hash << 5) + *hash) + c; /* hash * 33 + c */
+            *hash = ((*hash << 5) + *hash) + c;
         }
         *len = (unsigned int)(p - str - 1);  /* return the length */
     }
