@@ -187,6 +187,11 @@ static void test_object()
     size = json_object_size(v);
     assert(size == 9);
 
+    v2 = json_object_get(v, "9");
+    assert(v2);
+    assert(json_type(v2) == json_type_number);
+    assert(json_number_get(v2) == 10);
+
     json_free(v);
 }
 

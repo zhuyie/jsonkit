@@ -593,11 +593,13 @@ json_value* json_object_set(json_value *v, const char *name, json_value *value)
             object->items = items;
         }
 
+        /* add the new element to the end */
         if (!_object_item_init(name, len, hash, value, 
                 object->items + object->size, object->alloc_func)) {
             return NULL;
         }
 
+        /* adjust the virtual sorted_index array */
         for (i = object->size; i > lower_bound; --i)
             object->items[i].sorted_index = object->items[i - 1].sorted_index;
         object->items[lower_bound].sorted_index = object->size;
@@ -632,6 +634,12 @@ json_value* json_object_erase(json_value *v, const char *name)
     
     object->size -= 1;
     
+    /* fix sorted_index */
+    for (i = 0; i < object->size; ++i) {
+        if (object->items[i].sorted_index > index)
+            object->items[i].sorted_index -= 1;
+    }
+
     return v;
 }
 
