@@ -528,7 +528,7 @@ json_value* _json_object_get(json_value *v, const char *name, unsigned int len)
 {
     json_object *object = (json_object*)v;
     unsigned int hash;
-    int index, lower_bound;
+    int index;
 
     assert(object);
     assert(name);
@@ -537,7 +537,7 @@ json_value* _json_object_get(json_value *v, const char *name, unsigned int len)
         return NULL;
 
     _hash_string(name, &len, &hash);
-    index = _name_to_index(object, name, len, hash, &lower_bound);
+    index = _name_to_index(object, name, len, hash, NULL);
     if (index >= object->size)
         return NULL;
 
@@ -614,7 +614,7 @@ json_value* json_object_erase(json_value *v, const char *name)
 {
     json_object *object = (json_object*)v;
     unsigned int len = (unsigned int)-1, hash;
-    int i, index, lower_bound;
+    int i, index;
 
     assert(object);
     assert(name);
@@ -623,7 +623,7 @@ json_value* json_object_erase(json_value *v, const char *name)
         return NULL;
 
     _hash_string(name, &len, &hash);
-    index = _name_to_index(object, name, len, hash, &lower_bound);
+    index = _name_to_index(object, name, len, hash, NULL);
     if (index >= object->size)
         return NULL;
 
@@ -1109,12 +1109,13 @@ static int _name_to_index(
     int *lower_bound
     )
 {
-    int index, i;
+    int index, i, n;
     
     assert(object);
     assert(name);
-    assert(lower_bound);
 
+    if (!lower_bound)
+        lower_bound = &n;
     *lower_bound = _object_item_index_lower_bound(object->items, object->size, hash);
     assert(*lower_bound >= 0 && *lower_bound <= object->size);
 
