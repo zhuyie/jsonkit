@@ -381,6 +381,7 @@ static void test_parser()
     int n;
     json_value *res;
 
+    config.alloc_func = NULL;
     config.json_str = testJSON;
     config.json_str_len = 0;
     parser = json_parser_alloc(20, config);

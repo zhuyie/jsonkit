@@ -243,6 +243,11 @@ struct json_parser {
     json_parser_stack_item *stack;
 };
 
+extern void* json_default_alloc_func(
+    void *ptr, 
+    size_t osize, 
+    size_t nsize
+    );
 static int _push(
     json_parser *parser, 
     modes mode
@@ -277,6 +282,8 @@ json_parser* json_parser_alloc(int depth, json_parser_config config)
         return NULL;
     parser->depth = depth;
     memcpy(&parser->config, &config, sizeof(json_parser_config));
+    if (!parser->config.alloc_func)
+        parser->config.alloc_func = json_default_alloc_func;
     parser->state = GO;
     parser->char_index = 0;
     parser->top = -1;
@@ -470,7 +477,7 @@ static json_value* _create_string_value(
     )
 {
     if (config->json_str && index + len <= config->json_str_len) {
-        return json_string_alloc(config->json_str + index, len, NULL);
+        return json_string_alloc(config->json_str + index, len, config->alloc_func);
     }
     return NULL;
 }
@@ -488,7 +495,7 @@ static json_value* _create_number_value(
         memcpy(tmp, config->json_str + index, len);
         tmp[len] = '\0';
         dbl = atof(tmp);
-        return json_number_alloc(dbl, NULL);
+        return json_number_alloc(dbl, config->alloc_func);
     }
     return NULL;
 }
@@ -529,12 +536,12 @@ static int _push(json_parser *parser, modes mode)
     top_stack_item->value_begin = 0;
 
     if (mode == MODE_ARRAY) {
-        v = json_array_alloc(NULL);
+        v = json_array_alloc(parser->config.alloc_func);
         if (!v)
             return false;
         top_stack_item->value = v;
     } else if (mode == MODE_OBJECT) {
-        v = json_object_alloc(NULL);
+        v = json_object_alloc(parser->config.alloc_func);
         if (!v)
             return false;
         top_stack_item->value = v;
@@ -627,15 +634,15 @@ static int _change_state(json_parser *parser, int next_state)
         if (parser->state == N3) {
             /* null */
             value_end = 1;
-            v = json_null_alloc(NULL);
+            v = json_null_alloc(parser->config.alloc_func);
         } else if (parser->state == T3) {
             /* true */
             value_end = 1;
-            v = json_boolean_alloc(1, NULL);
+            v = json_boolean_alloc(1, parser->config.alloc_func);
         } else if (parser->state == F4) {
             /* false */
             value_end = 1;
-            v = json_boolean_alloc(0, NULL);
+            v = json_boolean_alloc(0, parser->config.alloc_func);
         } else if (parser->state == ST) {
             /* end of string in object_value or array */
             assert(top_stack_item->value_begin > 0);

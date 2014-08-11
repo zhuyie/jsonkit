@@ -93,7 +93,7 @@ typedef struct json_array {
     unsigned int size;
 } json_array;
 
-static void* _default_alloc_func(
+extern void* json_default_alloc_func(
     void *ptr, 
     size_t osize, 
     size_t nsize
@@ -164,7 +164,7 @@ json_value* json_string_alloc(const char *str, unsigned int len, json_alloc_func
     assert(str);
     
     if (!alloc_func)
-        alloc_func = _default_alloc_func;
+        alloc_func = json_default_alloc_func;
 
     if (len == (unsigned int)-1)
         len = (unsigned int)strlen(str);
@@ -369,7 +369,7 @@ json_value* json_number_alloc(double number, json_alloc_func alloc_func)
     json_number *v;
 
     if (!alloc_func)
-        alloc_func = _default_alloc_func;
+        alloc_func = json_default_alloc_func;
 
     v = (json_number*)alloc_func(NULL, 0, sizeof(json_number));
     if (!v)
@@ -413,7 +413,7 @@ json_value* json_boolean_alloc(int boolean, json_alloc_func alloc_func)
     json_value *v;
 
     if (!alloc_func)
-        alloc_func = _default_alloc_func;
+        alloc_func = json_default_alloc_func;
 
     v = (json_value*)alloc_func(NULL, 0, sizeof(json_value));
     if (!v)
@@ -456,7 +456,7 @@ json_value* json_null_alloc(json_alloc_func alloc_func)
     json_value *v;
 
     if (!alloc_func)
-        alloc_func = _default_alloc_func;
+        alloc_func = json_default_alloc_func;
 
     v = (json_value*)alloc_func(NULL, 0, sizeof(json_value));
     if (!v)
@@ -475,7 +475,7 @@ json_value* json_object_alloc(json_alloc_func alloc_func)
     json_object *object;
 
     if (!alloc_func)
-        alloc_func = _default_alloc_func;
+        alloc_func = json_default_alloc_func;
 
     object = (json_object*)alloc_func(NULL, 0, sizeof(json_object));
     if (!object)
@@ -650,7 +650,7 @@ json_value* json_array_alloc(json_alloc_func alloc_func)
     json_array *array;
 
     if (!alloc_func)
-        alloc_func = _default_alloc_func;
+        alloc_func = json_default_alloc_func;
 
     array = (json_array*)alloc_func(NULL, 0, sizeof(json_array));
     if (!array)
@@ -977,12 +977,6 @@ json_value* json_dotget_array(json_value *v, const char *dotname)
 }
 
 /*----------------------------------------------------------------------------*/
-
-static void* _default_alloc_func(void *ptr, size_t osize, size_t nsize)
-{
-    (void)osize;
-    return realloc(ptr, nsize);
-}
 
 static double _NaN()
 {

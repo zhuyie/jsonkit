@@ -118,6 +118,7 @@ struct json_parser;
 typedef struct json_parser json_parser;
 
 typedef struct json_parser_config {
+    json_alloc_func alloc_func;
     const char *json_str;
     unsigned int json_str_len;
 } json_parser_config;
